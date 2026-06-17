@@ -8,6 +8,36 @@ from .config import API_KEY
 DEBUG = False
 _tls = threading.local()  # per-thread context for debug labels
 BASE = "https://api.steampowered.com"
+COMMUNITY = "https://steamcommunity.com"
+
+
+def community_get(
+    path: str,
+    *,
+    cookies: dict | None = None,
+    allow_redirects: bool = True,
+    timeout: int = 10,
+) -> requests.Response | None:
+    """GET a steamcommunity.com path. Returns None on any network error."""
+    try:
+        return requests.get(
+            f"{COMMUNITY}/{path}",
+            cookies=cookies,
+            allow_redirects=allow_redirects,
+            timeout=timeout,
+        )
+    except requests.RequestException:
+        return None
+
+
+def community_post(
+    path: str,
+    *,
+    data: dict | None = None,
+    timeout: int = 15,
+) -> requests.Response:
+    """POST to a steamcommunity.com path with form data."""
+    return requests.post(f"{COMMUNITY}/{path}", data=data, timeout=timeout)
 
 
 def get(endpoint: str, params: dict, retries: int = 3) -> dict | None:

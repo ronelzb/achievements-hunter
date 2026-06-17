@@ -12,10 +12,13 @@ requires-python = ">=3.12"
 dependencies = [
     "requests>=2.32",
     "python-dotenv>=1.0",
+    "rsa>=4.9",
+    "keyring>=25.0",
 ]
 
 [project.scripts]
 steam-achievements = "steam_tracker.leaderboard_cli:main"
+steam-login = "steam_tracker.steam_login:main"
 
 [dependency-groups]
 dev = [
