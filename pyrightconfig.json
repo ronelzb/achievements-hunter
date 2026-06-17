@@ -3,7 +3,8 @@
   "typeCheckingMode": "standard",
   "venvPath": ".",
   "venv": ".venv",
-  "include": ["scripts", "tests"],
-  "extraPaths": ["scripts"],
-  "exclude": ["**/__pycache__", "**/node_modules", "**/.venv", "**/.*"]
+  "include": ["src", "scripts", "tests"],
+  "extraPaths": ["src"],
+  "exclude": ["**/__pycache__", "**/node_modules", "**/.venv", "**/.*"],
+  "reportUnusedVariable": "warning"
 }
