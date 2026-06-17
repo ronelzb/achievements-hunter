@@ -3,6 +3,7 @@
   "typeCheckingMode": "standard",
   "venvPath": ".",
   "venv": ".venv",
-  "include": ["scripts"],
-  "exclude": ["**/__pycache__"]
+  "include": ["scripts", "tests"],
+  "extraPaths": ["scripts"],
+  "exclude": ["**/__pycache__", "**/node_modules", "**/.venv", "**/.*"]
 }
