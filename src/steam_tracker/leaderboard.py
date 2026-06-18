@@ -6,6 +6,7 @@ from .steam_api import (
     _SERVER_ERROR,
     get_friend_ids,
     get_owned_games,
+    get_owned_games_auth,
     get_player_summaries_bulk,
     get_ytd_achievement_count,
 )
@@ -17,12 +18,17 @@ def count_ytd_achievements_for_player(
     year: int,
     max_workers: int = 4,
     verbose: bool = False,
+    api_token: str | None = None,
 ) -> int:
     """
     Fetches all owned games for a player and sums up YTD achievements.
     Only processes games where playtime_forever > 0 to skip unplayed games fast.
     """
-    games = get_owned_games(steam_id)
+    games = (
+        get_owned_games_auth(steam_id, api_token)
+        if api_token
+        else get_owned_games(steam_id)
+    )
     played = [game for game in games if game.get("playtime_forever", 0) > 0]
     # Steam API bug: GetPlayerAchievements returns HTTP 500 (not 400) for games
     # with no achievement schema (e.g. Lethal Company, Don't Starve). The fix is
@@ -33,14 +39,18 @@ def count_ytd_achievements_for_player(
     if verbose:
         skipped = len(played) - len(with_stats)
         skip_note = f", {skipped} skipped (no achievement schema)" if skipped else ""
-        print(f"    {len(with_stats)} games with achievements{skip_note}, fetching …")
+        source = "auth" if api_token else "public API"
+        print(
+            f"    {len(games)} games via {source} ({len(played)} played), "
+            f"{len(with_stats)} with achievements{skip_note}, fetching …"
+        )
+
+    def fetch_count(app_id: int) -> int:
+        return get_ytd_achievement_count(steam_id, app_id, year)
 
     game_results: list[tuple[int, dict]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {
-            pool.submit(get_ytd_achievement_count, steam_id, game["appid"], year): game
-            for game in with_stats
-        }
+        futures = {pool.submit(fetch_count, game["appid"]): game for game in with_stats}
         for future in as_completed(futures):
             game_results.append((future.result(), futures[future]))
 
@@ -86,6 +96,7 @@ def build_leaderboard(
     top_n: int | None = None,
     max_workers: int = 4,
     debug: bool = False,
+    api_token: str | None = None,
 ) -> list[dict]:
     """Returns a sorted list of {name, steam_id, count, is_me} dicts."""
     print(f"\n🎮  Steam YTD Achievement Leaderboard — {year}")
@@ -107,7 +118,11 @@ def build_leaderboard(
         tag = " (YOU)" if steam_id == MY_ID else ""
         print(f"  ⏳ Fetching: {name}{tag}")
         count = count_ytd_achievements_for_player(
-            steam_id, year, max_workers=max_workers, verbose=debug
+            steam_id,
+            year,
+            max_workers=max_workers,
+            verbose=debug,
+            api_token=api_token if steam_id == MY_ID else None,
         )
         return {
             "name": name,

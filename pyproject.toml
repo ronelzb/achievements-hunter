@@ -18,7 +18,7 @@ dependencies = [
 
 [project.scripts]
 steam-achievements = "steam_tracker.leaderboard_cli:main"
-steam-login = "steam_tracker.steam_login:main"
+steam-login = "steam_tracker.steam_auth:main"
 
 [dependency-groups]
 dev = [

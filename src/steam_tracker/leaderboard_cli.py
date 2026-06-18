@@ -4,6 +4,13 @@ from datetime import datetime
 from . import steam_http
 from .config import API_KEY, MY_ID
 from .leaderboard import build_leaderboard
+from .steam_api import generate_api_access_token
+from .steam_auth import (
+    load_refresh_token,
+    load_session,
+    save_refresh_token,
+    validate_session,
+)
 
 
 def print_leaderboard(results: list[dict], year: int) -> None:
@@ -58,10 +65,42 @@ def main() -> None:
         )
         return
 
+    raw = load_session()
+    api_token: str | None = None
+    if not raw:
+        if args.debug:
+            print("[debug] no session cookie in keyring — run steam-login first")
+    elif not validate_session(raw, debug=args.debug):
+        if args.debug:
+            print(
+                "[debug] session invalid — using public endpoints (re-run steam-login)"
+            )
+    else:
+        refresh_token = load_refresh_token()
+        if refresh_token:
+            try:
+                api_token, new_refresh = generate_api_access_token(
+                    refresh_token, MY_ID, debug=args.debug
+                )
+                if new_refresh:
+                    save_refresh_token(new_refresh)
+                if args.debug:
+                    print("[debug] API access token generated from refresh token")
+            except Exception as exc:
+                if args.debug:
+                    print(
+                        f"[debug] could not generate API access token ({exc}) — using public API"
+                    )
+        elif args.debug:
+            print(
+                "[debug] no refresh token stored — re-run steam-login to enable auth bypass"
+            )
+
     results = build_leaderboard(
         year=args.year,
         top_n=args.top,
         max_workers=args.concurrency,
         debug=args.debug,
+        api_token=api_token,
     )
     print_leaderboard(results, args.year)

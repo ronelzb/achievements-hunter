@@ -9,6 +9,13 @@ DEBUG = False
 _tls = threading.local()  # per-thread context for debug labels
 BASE = "https://api.steampowered.com"
 COMMUNITY = "https://steamcommunity.com"
+AUTH_API = f"{BASE}/IAuthenticationService"
+FINALIZE_URL = "https://login.steampowered.com/jwt/finalizelogin"
+
+
+def auth_post(endpoint: str, data: dict, *, timeout: int = 15) -> requests.Response:
+    """POST to IAuthenticationService. `endpoint` is the method name without the /v1 suffix."""
+    return requests.post(f"{AUTH_API}/{endpoint}/v1", data=data, timeout=timeout)
 
 
 def community_get(
@@ -40,8 +47,7 @@ def community_post(
     return requests.post(f"{COMMUNITY}/{path}", data=data, timeout=timeout)
 
 
-def get(endpoint: str, params: dict, retries: int = 3) -> dict | None:
-    params["key"] = API_KEY
+def _api_get(endpoint: str, params: dict, retries: int) -> dict | None:
     url = f"{BASE}/{endpoint}"
     for attempt in range(retries):
         try:
@@ -68,11 +74,22 @@ def get(endpoint: str, params: dict, retries: int = 3) -> dict | None:
                             f"  [debug]{who} {endpoint} → HTTP {response.status_code}{hint}: {response.text[:200]}"
                         )
                 if 400 <= response.status_code < 500:
-                    return None  # client errors are deterministic, don't retry
+                    return None
                 wait = 2**attempt
                 time.sleep(wait)
-                continue  # 5xx: transient, retry with backoff
+                continue
             return response.json()
         except requests.RequestException:
             time.sleep(1)
     return None
+
+
+def get(endpoint: str, params: dict, retries: int = 3) -> dict | None:
+    return _api_get(endpoint, {**params, "key": API_KEY}, retries)
+
+
+def get_authed(
+    endpoint: str, params: dict, *, access_token: str, retries: int = 3
+) -> dict | None:
+    """Like get() but authenticates with a user OAuth access token instead of the developer API key."""
+    return _api_get(endpoint, {**params, "access_token": access_token}, retries)
