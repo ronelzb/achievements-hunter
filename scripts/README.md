@@ -114,3 +114,7 @@ appears when the session is missing or stale.
 
 > **Note:** This only unlocks *your own* data. Friends with private profiles still
 > show 0 — there is no bypass without their session.
+>
+> **Future:** Steam also supports QR-code login (scan with the mobile app — no password
+> typed). This would require migrating to Steam's newer `IAuthenticationService` API,
+> which is a separate implementation from the current credential flow. Not supported yet.
