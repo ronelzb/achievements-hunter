@@ -13,6 +13,10 @@ _SERVER_ERROR = -2  # sentinel: achievement fetch failed after all retries (5xx)
 
 
 def get_player_summary(steam_id: str) -> dict:
+    """Returns the player summary dict, or a stub {steamid, personaname} on API failure.
+
+    The stub ensures callers can always read personaname without a None check.
+    """
     data = get("ISteamUser/GetPlayerSummaries/v2", {"steamids": steam_id})
     if data:
         players = data.get("response", {}).get("players", [])
@@ -51,6 +55,13 @@ def resolve_friends(entries: list[str]) -> list[str]:
 
 
 def get_friend_ids(steam_id: str) -> list[str]:
+    """Returns Steam64 IDs of the player's friends.
+
+    Checks FRIENDS_OVERRIDE first (env var STEAM_FRIENDS), which lets users
+    hardcode a friend list without making their Steam friends list public.
+    Falls back to GetFriendList; returns [] with a printed hint when the API
+    returns nothing (typically because the friends list is set to private).
+    """
     if FRIENDS_OVERRIDE:
         return resolve_friends(FRIENDS_OVERRIDE)
     data = get(
@@ -70,6 +81,12 @@ def get_friend_ids(steam_id: str) -> list[str]:
 
 
 def get_owned_games(steam_id: str) -> list[dict]:
+    """Returns the player's owned games with app info and free-to-play titles included.
+
+    include_appinfo adds name and has_community_visible_stats (used to skip games
+    with no achievement schema). include_played_free_games ensures F2P titles like
+    TF2 appear — they are omitted by default.
+    """
     data = get(
         "IPlayerService/GetOwnedGames/v1",
         {"steamid": steam_id, "include_appinfo": 1, "include_played_free_games": 1},
@@ -164,7 +181,22 @@ def get_player_summaries_bulk(player_ids: list[str]) -> dict[str, str]:
 
 
 def begin_auth(username: str, encrypted_password: str, rsa_timestamp: str) -> dict:
-    """Starts an IAuthenticationService auth session. Returns the response dict."""
+    """Starts a BeginAuthSessionViaCredentials session and returns the response dict.
+
+    The response contains client_id, request_id, steamid, interval, and
+    allowed_confirmations, which are forwarded to the guard and polling steps.
+
+    Field rationale:
+    - encryption_timestamp: must match the RSA key version Steam issued; Steam
+      rejects requests where the timestamp doesn't correspond to the active key.
+    - platform_type 3 (MobileApp): causes Steam to embed "mobile" in the refresh
+      token's JWT aud claim. That claim is required by GenerateAccessTokenForApp —
+      platform_type 2 (WebBrowser) omits it and makes that call return an empty
+      response. See generate_api_access_token for details.
+    - persistence 1 + remember_login: request a long-lived refresh token instead
+      of a session-scoped one, so the stored token survives across reboots without
+      needing to re-authenticate.
+    """
     response = auth_post(
         "BeginAuthSessionViaCredentials",
         data={
@@ -187,7 +219,13 @@ def begin_auth(username: str, encrypted_password: str, rsa_timestamp: str) -> di
 
 
 def submit_guard_code(client_id: str, steam_id: str, code: str, code_type: int) -> None:
-    """Submits a Steam Guard code to approve the pending auth session."""
+    """Submits a Steam Guard code to approve the pending auth session.
+
+    code_type mirrors EAuthSessionGuardType:
+        * 2 = email code
+        * 3 = TOTP authenticator code
+        * 4 = mobile app confirmation (no code — user taps Approve in the app).
+    """
     response = auth_post(
         "UpdateAuthSessionWithSteamGuardCode",
         data={
@@ -201,7 +239,13 @@ def submit_guard_code(client_id: str, steam_id: str, code: str, code_type: int) 
 
 
 def poll_auth_session(client_id: str, request_id: str, interval: float = 5.0) -> str:
-    """Polls until the auth session is approved; returns the refresh token."""
+    """Polls PollAuthSessionStatus until approved and returns the refresh token.
+
+    `interval` should be the value from BeginAuthSessionViaCredentials (Steam's
+    recommended polling rate, typically 5 s). Raises RuntimeError after 12 attempts
+    (~60 s at the default interval) — enough time for the user to respond to a
+    Steam Guard prompt without blocking indefinitely.
+    """
     for _ in range(12):
         response = auth_post(
             "PollAuthSessionStatus",
@@ -217,7 +261,13 @@ def poll_auth_session(client_id: str, request_id: str, interval: float = 5.0) ->
 
 
 def finalize_session(refresh_token: str, steam_id: str, *, debug: bool = False) -> str:
-    """Exchanges a refresh token for the steamcommunity.com steamLoginSecure cookie."""
+    """Exchanges a refresh token for the steamcommunity.com steamLoginSecure cookie.
+
+    Steam's finalize flow is two-phase: POST to /jwt/finalizelogin returns a
+    transfer_info list of per-domain URLs. We pick the steamcommunity.com entry
+    and POST to it with allow_redirects=False — following the redirect would lose
+    the Set-Cookie header that carries steamLoginSecure.
+    """
     session_id = secrets.token_hex(12)
     with requests.Session() as http:
         http.cookies.set("sessionid", session_id)
@@ -279,7 +329,14 @@ def finalize_session(refresh_token: str, steam_id: str, *, debug: bool = False) 
 
 
 def get_ytd_achievement_count(steam_id: str, app_id: int, year: int) -> int:
-    """Returns achievements unlocked during `year`, or a sentinel if the fetch failed."""
+    """Returns achievements unlocked during `year`, or a sentinel on failure.
+
+    Returns _BLOCKED (-1) on HTTP 403 — the game's stats are private.
+    Returns _SERVER_ERROR (-2) on HTTP 5xx — Steam returns 500 (not 400) for
+    games that never had an achievement schema, so callers pre-filter with
+    has_community_visible_stats to avoid hitting this path for most games.
+    Callers must exclude both sentinels from totals.
+    """
     _tls.last_status = None
     data = get(
         "ISteamUserStats/GetPlayerAchievements/v1",
