@@ -1,7 +1,7 @@
 import base64
 import json
 
-from steam_tracker.utils import decode_token
+from steam_tracker.utils import decode_token, truncate
 
 
 def _make_jwt_cookie(payload: dict) -> str:
@@ -60,3 +60,27 @@ def test_decode_token_returns_none_for_empty_cookie():
 
 def test_decode_token_returns_none_for_missing_separator():
     assert decode_token("plaintoken") is None
+
+
+# ── truncate ──────────────────────────────────────────────────────────────────
+
+
+def test_truncate_returns_string_unchanged_when_within_width():
+    assert truncate("hello", 10) == "hello"
+
+
+def test_truncate_returns_string_unchanged_when_exactly_at_width():
+    assert truncate("hello", 5) == "hello"
+
+
+def test_truncate_cuts_and_appends_ellipsis_when_over_width():
+    assert truncate("hello world", 8) == "hello w…"
+
+
+def test_truncate_result_length_equals_width():
+    result = truncate("abcdefghij", 6)
+    assert len(result) == 6
+
+
+def test_truncate_empty_string():
+    assert truncate("", 5) == ""

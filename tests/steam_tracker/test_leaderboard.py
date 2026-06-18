@@ -1,6 +1,26 @@
+from unittest.mock import MagicMock
+
 import pytest
 
 from steam_tracker import leaderboard, steam_api
+
+_MY_ID = "00000"
+_FRIEND_A = "11111"
+_FRIEND_B = "22222"
+_NAMES = {_MY_ID: "Me", _FRIEND_A: "Zephyr", _FRIEND_B: "AlphaGamer"}
+
+
+def _setup_build(monkeypatch, friend_ids=None, names=None):
+    """Wire up build_leaderboard dependencies."""
+    monkeypatch.setattr(
+        leaderboard, "get_friend_ids", lambda _: friend_ids or [_FRIEND_A, _FRIEND_B]
+    )
+    monkeypatch.setattr(
+        leaderboard, "get_player_summaries_bulk", lambda _: names or _NAMES
+    )
+    monkeypatch.setattr(
+        leaderboard, "count_ytd_achievements_for_player", MagicMock(return_value=0)
+    )
 
 
 @pytest.fixture
@@ -144,3 +164,75 @@ def test_count_verbose_no_warning_when_all_succeed(player_setup, capsys):
     out = capsys.readouterr().out
     assert "⚠" not in out
     assert "→ 3 achievements" in out
+
+
+# ── build_leaderboard filter ──────────────────────────────────────────────────
+
+
+def test_build_leaderboard_filter_excludes_non_matching_friends(monkeypatch):
+    _setup_build(monkeypatch)
+    mock = MagicMock(return_value=0)
+    monkeypatch.setattr(leaderboard, "count_ytd_achievements_for_player", mock)
+    leaderboard.build_leaderboard(2026, _MY_ID, filter_names=["zephyr"])
+    called_ids = {call.args[0] for call in mock.call_args_list}
+    assert _FRIEND_A in called_ids
+    assert _FRIEND_B not in called_ids
+
+
+def test_build_leaderboard_filter_always_includes_me(monkeypatch):
+    _setup_build(monkeypatch)
+    mock = MagicMock(return_value=0)
+    monkeypatch.setattr(leaderboard, "count_ytd_achievements_for_player", mock)
+    leaderboard.build_leaderboard(2026, _MY_ID, filter_names=["zzznomatch"])
+    called_ids = {call.args[0] for call in mock.call_args_list}
+    assert _MY_ID in called_ids
+
+
+def test_build_leaderboard_filter_is_case_insensitive(monkeypatch):
+    _setup_build(monkeypatch)
+    mock = MagicMock(return_value=0)
+    monkeypatch.setattr(leaderboard, "count_ytd_achievements_for_player", mock)
+    leaderboard.build_leaderboard(2026, _MY_ID, filter_names=["ALPHA"])
+    called_ids = {call.args[0] for call in mock.call_args_list}
+    assert _FRIEND_B in called_ids
+    assert _FRIEND_A not in called_ids
+
+
+def test_build_leaderboard_filter_supports_partial_match(monkeypatch):
+    _setup_build(monkeypatch)
+    mock = MagicMock(return_value=0)
+    monkeypatch.setattr(leaderboard, "count_ytd_achievements_for_player", mock)
+    leaderboard.build_leaderboard(2026, _MY_ID, filter_names=["eph"])
+    called_ids = {call.args[0] for call in mock.call_args_list}
+    assert _FRIEND_A in called_ids
+    assert _FRIEND_B not in called_ids
+
+
+def test_build_leaderboard_filter_debug_warns_unmatched_term(monkeypatch, capsys):
+    _setup_build(monkeypatch)
+    leaderboard.build_leaderboard(
+        2026, _MY_ID, filter_names=["zephyr", "zzznomatch"], debug=True
+    )
+    out = capsys.readouterr().out
+    assert "'zzznomatch'" in out
+    assert "no friends matched" in out
+    assert "friends searched" in out
+
+
+def test_build_leaderboard_filter_debug_silent_when_all_match(monkeypatch, capsys):
+    _setup_build(monkeypatch)
+    leaderboard.build_leaderboard(2026, _MY_ID, filter_names=["zephyr"], debug=True)
+    out = capsys.readouterr().out
+    assert "no friends matched" not in out
+    assert "friends searched" not in out
+
+
+def test_build_leaderboard_no_filter_includes_all_friends(monkeypatch):
+    _setup_build(monkeypatch)
+    mock = MagicMock(return_value=0)
+    monkeypatch.setattr(leaderboard, "count_ytd_achievements_for_player", mock)
+    leaderboard.build_leaderboard(2026, _MY_ID)
+    called_ids = {call.args[0] for call in mock.call_args_list}
+    assert _MY_ID in called_ids
+    assert _FRIEND_A in called_ids
+    assert _FRIEND_B in called_ids

@@ -7,6 +7,7 @@ import time
 import keyring
 import rsa
 
+from .config import MY_ID
 from .steam_api import (
     begin_auth,
     finalize_session,
@@ -42,6 +43,52 @@ def logout() -> None:
     for username in (_KEYRING_USERNAME, _KEYRING_REFRESH):
         with contextlib.suppress(Exception):
             keyring.delete_password(_KEYRING_SERVICE, username)
+
+
+def steam_id_from_session(*, debug: bool = False) -> str | None:
+    """Extracts the Steam64 ID from the stored session cookie.
+
+    Tries the steamid||jwt prefix format first, then falls back to the JWT
+    sub claim (Steam embeds the Steam64 ID there in the current token format).
+    """
+    cookie = load_session()
+    if not cookie:
+        if debug:
+            print("[debug] no session cookie in keyring — run steam-login first")
+        return None
+    if debug:
+        _payload = decode_token(cookie)
+        if _payload:
+            _mask = {"sub", "steamid", "jti", "iss", "ip_subject", "ip_confirmer"}
+            _masked = {
+                k: (
+                    str(v)[:4] + "…" + str(v)[-3:]
+                    if k in _mask and len(str(v)) > 6
+                    else v
+                )
+                for k, v in _payload.items()
+            }
+            print(f"[debug] session token claims: {_masked}")
+        else:
+            print("[debug] session cookie found but JWT could not be decoded")
+    parts = cookie.split("||", 1)
+    if len(parts) == 2 and parts[0].isdigit():
+        return parts[0]
+    payload = decode_token(cookie)
+    if payload:
+        sub = str(payload.get("sub", ""))
+        if sub.isdigit():
+            return sub
+    if debug:
+        print(
+            "[debug] session cookie found but Steam ID could not be extracted — unexpected format"
+        )
+    return None
+
+
+def get_my_id(*, debug: bool = False) -> str | None:
+    """Returns the user's Steam64 ID from STEAM_ID env var or the stored session cookie."""
+    return MY_ID or steam_id_from_session(debug=debug)
 
 
 def _token_expiry(cookie: str) -> int | None:

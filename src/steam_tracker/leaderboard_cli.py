@@ -2,10 +2,11 @@ import argparse
 from datetime import datetime
 
 from . import steam_http
-from .config import API_KEY, MY_ID
+from .config import API_KEY
 from .leaderboard import build_leaderboard
 from .steam_api import generate_api_access_token
 from .steam_auth import (
+    get_my_id,
     load_refresh_token,
     load_session,
     save_refresh_token,
@@ -49,19 +50,29 @@ def main() -> None:
     )
     parser.add_argument("--top", type=int, default=None, help="Show only top N players")
     parser.add_argument(
+        "--filter",
+        "-f",
+        nargs="+",
+        metavar="NAME",
+        help="Compare only with friends whose display name contains NAME (case-insensitive)",
+    )
+    parser.add_argument(
         "--concurrency",
         type=int,
         default=4,
         help="Parallel requests per player (default: 4)",
     )
-    parser.add_argument("--debug", action="store_true", help="Print raw API errors")
+    parser.add_argument(
+        "--debug", "-d", action="store_true", help="Print raw API errors"
+    )
     args = parser.parse_args()
 
     steam_http.DEBUG = args.debug
 
-    if API_KEY == "YOUR_API_KEY_HERE" or MY_ID == "YOUR_STEAM64_ID_HERE":
+    my_id = get_my_id(debug=args.debug)
+    if API_KEY == "YOUR_API_KEY_HERE" or not my_id:
         print(
-            "❌  Please set STEAM_API_KEY and STEAM_ID (env vars or edit CONFIG block)."
+            "❌  Please set STEAM_API_KEY in .env and, either STEAM_ID or run steam-login first."
         )
         return
 
@@ -80,7 +91,7 @@ def main() -> None:
         if refresh_token:
             try:
                 api_token, new_refresh = generate_api_access_token(
-                    refresh_token, MY_ID, debug=args.debug
+                    refresh_token, my_id, debug=args.debug
                 )
                 if new_refresh:
                     save_refresh_token(new_refresh)
@@ -98,9 +109,11 @@ def main() -> None:
 
     results = build_leaderboard(
         year=args.year,
+        my_id=my_id,
         top_n=args.top,
         max_workers=args.concurrency,
         debug=args.debug,
         api_token=api_token,
+        filter_names=args.filter,
     )
     print_leaderboard(results, args.year)

@@ -1,9 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .config import MY_ID
 from .steam_api import (
     _BLOCKED,
     _SERVER_ERROR,
+    filter_by_display_name,
     get_friend_ids,
     get_owned_games,
     get_owned_games_auth,
@@ -19,6 +19,7 @@ def count_ytd_achievements_for_player(
     max_workers: int = 4,
     verbose: bool = False,
     api_token: str | None = None,
+    label: str = "",
 ) -> int:
     """
     Fetches all owned games for a player and sums up YTD achievements.
@@ -40,8 +41,10 @@ def count_ytd_achievements_for_player(
         skipped = len(played) - len(with_stats)
         skip_note = f", {skipped} skipped (no achievement schema)" if skipped else ""
         source = "auth" if api_token else "public API"
+        private_hint = " — Game Details may be private" if games and not played else ""
+        prefix = f"    [{label}] " if label else "    "
         print(
-            f"    {len(games)} games via {source} ({len(played)} played), "
+            f"{prefix}{len(games)} games via {source} ({len(played)} played{private_hint}), "
             f"{len(with_stats)} with achievements{skip_note}, fetching …"
         )
 
@@ -80,58 +83,73 @@ def count_ytd_achievements_for_player(
         if failed_games:
             notes.append(f"{len(failed_games)} game(s) failed (server error)")
         note = " ⚠ " + ", ".join(notes) if notes else ""
-        print(f"    → {total} achievements in {year}{note}")
+        prefix = f"    [{label}] " if label else "    "
+        print(f"{prefix}→ {total} achievements in {year}{note}")
         if blocked_games:
-            names = ", ".join(_game_name(game) for game in blocked_games)
-            print(f"         blocked:      {names}")
+            game_names = ", ".join(_game_name(game) for game in blocked_games)
+            print(f"{prefix}    blocked:      {game_names}")
         if failed_games:
-            names = ", ".join(_game_name(game) for game in failed_games)
-            print(f"         server error: {names}")
+            game_names = ", ".join(_game_name(game) for game in failed_games)
+            print(f"{prefix}    server error: {game_names}")
 
     return total
 
 
 def build_leaderboard(
     year: int,
+    my_id: str,
     top_n: int | None = None,
     max_workers: int = 4,
     debug: bool = False,
     api_token: str | None = None,
+    filter_names: list[str] | None = None,
 ) -> list[dict]:
     """Returns a sorted list of {name, steam_id, count, is_me} dicts."""
     print(f"\n🎮  Steam YTD Achievement Leaderboard — {year}")
     print("=" * 52)
 
     friend_ids = [
-        friend_id for friend_id in get_friend_ids(MY_ID) if friend_id != MY_ID
+        friend_id for friend_id in get_friend_ids(my_id) if friend_id != my_id
     ]
     print(f"  Friends found: {len(friend_ids)}")
 
-    player_ids = [MY_ID, *friend_ids]
+    player_ids = [my_id, *friend_ids]
     names = get_player_summaries_bulk(player_ids)
+
+    if filter_names:
+        entries = [(fid, names.get(fid, fid)) for fid in friend_ids]
+        friend_ids, unmatched = filter_by_display_name(entries, filter_names)
+        if debug and unmatched:
+            for term in unmatched:
+                print(f"[debug] no friends matched filter term: {term!r}")
+            searched = ", ".join(name for _, name in entries)
+            print(f"[debug] friends searched ({len(entries)}): {searched}")
+        print(f"  Filtered to: {len(friend_ids)} friend(s)")
+        player_ids = [my_id, *friend_ids]
 
     results: list[dict] = []
 
     def process(steam_id: str) -> dict:
         name = names.get(steam_id, steam_id)
         _tls.player_name = name
-        tag = " (YOU)" if steam_id == MY_ID else ""
+        tag = " (YOU)" if steam_id == my_id else ""
         print(f"  ⏳ Fetching: {name}{tag}")
         count = count_ytd_achievements_for_player(
             steam_id,
             year,
             max_workers=max_workers,
             verbose=debug,
-            api_token=api_token if steam_id == MY_ID else None,
+            api_token=api_token if steam_id == my_id else None,
+            label=name,
         )
         return {
             "name": name,
             "steam_id": steam_id,
             "count": count,
-            "is_me": steam_id == MY_ID,
+            "is_me": steam_id == my_id,
         }
 
-    me_result = process(MY_ID)
+    me_result = process(my_id)
     results.append(me_result)
 
     with ThreadPoolExecutor(max_workers=min(max_workers, len(friend_ids) or 1)) as pool:

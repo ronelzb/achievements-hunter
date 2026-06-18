@@ -118,6 +118,70 @@ def test_logout_handles_missing_entries_gracefully(monkeypatch):
     steam_auth.logout()  # should not raise
 
 
+# ── steam_id_from_session ─────────────────────────────────────────────────────
+
+
+def test_steam_id_from_session_extracts_id_from_valid_cookie(monkeypatch):
+    monkeypatch.setattr(steam_auth.keyring, "get_password", lambda *_: _COOKIE_VALUE)
+    assert steam_auth.steam_id_from_session() == "76561198000000000"
+
+
+def test_steam_id_from_session_returns_none_when_no_session(monkeypatch):
+    monkeypatch.setattr(steam_auth.keyring, "get_password", lambda *_: None)
+    assert steam_auth.steam_id_from_session() is None
+
+
+def test_steam_id_from_session_returns_none_for_malformed_cookie(monkeypatch):
+    monkeypatch.setattr(steam_auth.keyring, "get_password", lambda *_: "notvalidformat")
+    assert steam_auth.steam_id_from_session() is None
+
+
+# ── get_my_id ─────────────────────────────────────────────────────────────────
+
+
+def test_get_my_id_returns_config_id_when_set(monkeypatch):
+    monkeypatch.setattr(steam_auth, "MY_ID", "76561198111111111")
+    assert steam_auth.get_my_id() == "76561198111111111"
+
+
+def test_get_my_id_falls_back_to_session_when_my_id_empty(monkeypatch):
+    monkeypatch.setattr(steam_auth, "MY_ID", "")
+    monkeypatch.setattr(
+        steam_auth, "steam_id_from_session", MagicMock(return_value="76561198000000000")
+    )
+    assert steam_auth.get_my_id() == "76561198000000000"
+
+
+def test_get_my_id_returns_none_when_both_unset(monkeypatch):
+    monkeypatch.setattr(steam_auth, "MY_ID", "")
+    monkeypatch.setattr(
+        steam_auth, "steam_id_from_session", MagicMock(return_value=None)
+    )
+    assert steam_auth.get_my_id() is None
+
+
+def test_steam_id_from_session_falls_back_to_jwt_sub_claim(monkeypatch):
+    import base64
+    import json
+
+    payload_b64 = (
+        base64.urlsafe_b64encode(
+            json.dumps({"sub": "76561198000000000", "exp": 9999999999}).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
+    jwt_only_cookie = f"header.{payload_b64}.sig"
+    monkeypatch.setattr(steam_auth.keyring, "get_password", lambda *_: jwt_only_cookie)
+    assert steam_auth.steam_id_from_session() == "76561198000000000"
+
+
+def test_steam_id_from_session_debug_prints_when_no_cookie(monkeypatch, capsys):
+    monkeypatch.setattr(steam_auth.keyring, "get_password", lambda *_: None)
+    steam_auth.steam_id_from_session(debug=True)
+    assert "no session cookie" in capsys.readouterr().out
+
+
 # ── _token_expiry ─────────────────────────────────────────────────────────────
 # JWT format edge cases (plain strings, malformed base64) live in test_utils.py.
 # These tests cover what _token_expiry adds: extracting the exp int from a payload.

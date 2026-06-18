@@ -10,6 +10,7 @@ from .utils import decode_token
 
 _BLOCKED = -1  # sentinel: achievement fetch blocked (403)
 _SERVER_ERROR = -2  # sentinel: achievement fetch failed after all retries (5xx)
+_CHUNK_SIZE = 100
 
 
 def get_player_summary(steam_id: str) -> dict:
@@ -106,13 +107,18 @@ def generate_api_access_token(
     call will fail with an empty response.
     """
     payload = decode_token(refresh_token)
-    if payload is not None:
+    if payload is None:
+        if debug:
+            print(
+                "[debug] refresh token could not be decoded — run: steam-auth --logout then --login"
+            )
+    else:
         aud = payload.get("aud", [])
         if debug:
             print(f"[debug] refresh token aud: {aud}")
         if "mobile" not in aud:
             raise RuntimeError(
-                "Refresh token lacks 'mobile' audience — re-run 'steam-auth --login' to get a new token."
+                "Refresh token lacks 'mobile' audience — run: steam-auth --logout then --login"
             )
     response = auth_post(
         "GenerateAccessTokenForApp",
@@ -173,14 +179,46 @@ def get_owned_games_auth(steam_id: str, api_token: str) -> list[dict]:
 def get_player_summaries_bulk(player_ids: list[str]) -> dict[str, str]:
     """Fetches display names for up to 100 IDs per call. Returns {steamid: name}."""
     names: dict[str, str] = {}
-    chunk_size = 100
-    for i in range(0, len(player_ids), chunk_size):
-        chunk = player_ids[i : i + chunk_size]
+    for i in range(0, len(player_ids), _CHUNK_SIZE):
+        chunk = player_ids[i : i + _CHUNK_SIZE]
         data = get("ISteamUser/GetPlayerSummaries/v2", {"steamids": ",".join(chunk)})
         if data:
             for player in data.get("response", {}).get("players", []):
                 names[player["steamid"]] = player.get("personaname", player["steamid"])
     return names
+
+
+def get_player_summaries_bulk_full(player_ids: list[str]) -> list[dict]:
+    """Fetches full player summary dicts for up to 100 IDs per call."""
+    players: list[dict] = []
+    for i in range(0, len(player_ids), _CHUNK_SIZE):
+        chunk = player_ids[i : i + _CHUNK_SIZE]
+        data = get("ISteamUser/GetPlayerSummaries/v2", {"steamids": ",".join(chunk)})
+        if data:
+            players.extend(data.get("response", {}).get("players", []))
+    return players
+
+
+def filter_by_display_name(
+    entries: list[tuple[str, str]], terms: list[str]
+) -> tuple[list[str], list[str]]:
+    """Filters (steam_id, display_name) pairs by case-insensitive substring terms.
+
+    Returns (matched_ids, unmatched_terms). Each ID is included at most once;
+    a term is unmatched when no entry's name contains it as a substring.
+    """
+    lower_terms = [term.lower() for term in terms]
+    matched_ids: list[str] = []
+    matched_indices: set[int] = set()
+    for steam_id, name in entries:
+        name_lower = name.lower()
+        for i, term in enumerate(lower_terms):
+            if term in name_lower:
+                matched_ids.append(steam_id)
+                matched_indices.add(i)
+                break
+    unmatched_terms = [term for i, term in enumerate(terms) if i not in matched_indices]
+    return matched_ids, unmatched_terms
 
 
 # ── IAuthenticationService ────────────────────────────────────────────────────

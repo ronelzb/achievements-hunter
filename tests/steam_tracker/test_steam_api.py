@@ -7,6 +7,43 @@ import pytest
 
 from steam_tracker import steam_api, steam_http
 
+# ── filter_by_display_name ────────────────────────────────────────────────────
+
+_ENTRIES = [("1", "Zephyr"), ("2", "AlphaGamer")]
+
+
+def test_filter_by_display_name_matches_case_insensitively():
+    ids, unmatched = steam_api.filter_by_display_name(_ENTRIES, ["zephyr"])
+    assert ids == ["1"]
+    assert unmatched == []
+
+
+def test_filter_by_display_name_supports_partial_match():
+    ids, unmatched = steam_api.filter_by_display_name(_ENTRIES, ["alpha"])
+    assert ids == ["2"]
+    assert unmatched == []
+
+
+def test_filter_by_display_name_returns_unmatched_terms():
+    ids, unmatched = steam_api.filter_by_display_name(
+        _ENTRIES, ["zephyr", "zzznomatch"]
+    )
+    assert ids == ["1"]
+    assert unmatched == ["zzznomatch"]
+
+
+def test_filter_by_display_name_all_unmatched():
+    ids, unmatched = steam_api.filter_by_display_name(_ENTRIES, ["zzz"])
+    assert ids == []
+    assert unmatched == ["zzz"]
+
+
+def test_filter_by_display_name_empty_entries():
+    ids, unmatched = steam_api.filter_by_display_name([], ["zephyr"])
+    assert ids == []
+    assert unmatched == ["zephyr"]
+
+
 # ── resolve_friends ───────────────────────────────────────────────────────────
 
 
@@ -47,6 +84,41 @@ def test_get_friend_ids_returns_empty_on_api_failure(monkeypatch, capsys):
     result = steam_api.get_friend_ids("76561198000000001")
     assert result == []
     assert "Friends list unavailable" in capsys.readouterr().out
+
+
+# ── get_player_summaries_bulk_full ───────────────────────────────────────────
+
+
+def test_get_player_summaries_bulk_full_returns_player_dicts(monkeypatch):
+    players = [
+        {"steamid": "76561198000000001", "personaname": "Zephyr"},
+        {"steamid": "76561198000000002", "personaname": "AlphaGamer"},
+    ]
+    monkeypatch.setattr(steam_api, "get", lambda *_: {"response": {"players": players}})
+    result = steam_api.get_player_summaries_bulk_full(
+        ["76561198000000001", "76561198000000002"]
+    )
+    assert result == players
+
+
+def test_get_player_summaries_bulk_full_returns_empty_on_api_failure(monkeypatch):
+    monkeypatch.setattr(steam_api, "get", lambda *_: None)
+    assert steam_api.get_player_summaries_bulk_full(["76561198000000001"]) == []
+
+
+def test_get_player_summaries_bulk_full_chunks_requests(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_get(_, params):
+        calls.append(params["steamids"].split(","))
+        return {"response": {"players": []}}
+
+    monkeypatch.setattr(steam_api, "get", fake_get)
+    monkeypatch.setattr(steam_api, "_CHUNK_SIZE", 2)
+    steam_api.get_player_summaries_bulk_full(["1", "2", "3"])
+    assert len(calls) == 2
+    assert calls[0] == ["1", "2"]
+    assert calls[1] == ["3"]
 
 
 # ── get_ytd_achievement_count sentinels ───────────────────────────────────────

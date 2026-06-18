@@ -11,3 +11,9 @@ def decode_token(cookie: str) -> dict | None:
         return json.loads(base64.urlsafe_b64decode(payload_b64 + padding))
     except Exception:
         return None
+
+
+def truncate(text: str, width: int) -> str:
+    if len(text) > width:
+        return text[: width - 1] + "…"
+    return text
