@@ -153,6 +153,12 @@ def get_owned_games_auth(steam_id: str, api_token: str) -> list[dict]:
 
     ISteamUserStats/GetPlayerAchievements does not honour access_token — achievement
     counts are always fetched with the developer API key via get_ytd_achievement_count.
+
+    Verified against official Steam docs (partner.steamgames.com/doc/webapi/isteamuserstats):
+    the `key` parameter is mandatory with no token-based alternative. The OAuth-enabled
+    WebAPI services are a fixed list (ICloudService, IBroadcastService,
+    IGameNotificationsService, IPlayerService, IPublishedFileService) — ISteamUserStats
+    is not among them. STEAM_API_KEY cannot be derived from the login session.
     """
     data = get_authed(
         "IPlayerService/GetOwnedGames/v1",

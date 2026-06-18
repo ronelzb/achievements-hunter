@@ -94,6 +94,7 @@ appears when the session is missing or stale.
 - **Speed**: If a friend owns 500+ played games, their fetch takes 20–60 seconds depending on concurrency. The default of 4 parallel requests per player is safe; bump to 8 if you want speed and Steam doesn't throttle you.
 - **Rate limits**: Steam's API is lenient for personal keys but will 429 you if you hammer it. The script auto-retries with backoff.
 - **App-level privacy**: Some games hide achievements even on public profiles (e.g., adult games). These are silently skipped.
+- **Why the API key can't be dropped**: `ISteamUserStats/GetPlayerAchievements` requires a developer API key — it is not in Steam's OAuth-enabled service list (`ICloudService`, `IBroadcastService`, `IGameNotificationsService`, `IPlayerService`, `IPublishedFileService`) and does not honour user access tokens from `IAuthenticationService`. Third-party sites like SteamDB work the same way: they register their own key and can only read public profiles. The `steam-login` session unlocks your *own* private library via `IPlayerService/GetOwnedGames`, but achievement fetching always goes through the developer key. [Reference: partner.steamgames.com/doc/webapi/isteamuserstats]
 
 ## Example output
 
