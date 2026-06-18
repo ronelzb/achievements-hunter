@@ -36,6 +36,7 @@ def _stub_login_helpers(monkeypatch) -> None:
     monkeypatch.setattr(
         steam_auth, "poll_auth_session", MagicMock(return_value="refresh123")
     )
+    monkeypatch.setattr(steam_auth, "save_refresh_token", MagicMock())
     monkeypatch.setattr(
         steam_auth, "finalize_session", MagicMock(return_value=_COOKIE_VALUE)
     )
@@ -110,7 +111,7 @@ def test_logout_deletes_both_keyring_entries(monkeypatch):
 
 
 def test_logout_handles_missing_entries_gracefully(monkeypatch):
-    def raise_error(_, __):
+    def raise_error(*_):
         raise Exception("not found")
 
     monkeypatch.setattr(steam_auth.keyring, "delete_password", raise_error)

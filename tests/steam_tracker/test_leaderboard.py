@@ -21,7 +21,7 @@ def player_setup(monkeypatch):
             monkeypatch.setattr(
                 leaderboard,
                 "get_ytd_achievement_count",
-                lambda _, app_id, __: counts[app_id],
+                lambda *args: counts[args[1]],
             )
         else:
             monkeypatch.setattr(
@@ -47,7 +47,7 @@ def test_count_skips_games_without_achievement_schema(player_setup, monkeypatch)
     monkeypatch.setattr(
         leaderboard,
         "get_ytd_achievement_count",
-        lambda _, app_id, __: called.append(app_id) or 0,
+        lambda *args: called.append(args[1]) or 0,
     )
     leaderboard.count_ytd_achievements_for_player("steamid", 2026)
     assert set(called) == {1, 3}
@@ -64,7 +64,7 @@ def test_count_skips_unplayed_games(player_setup, monkeypatch):
     monkeypatch.setattr(
         leaderboard,
         "get_ytd_achievement_count",
-        lambda _, app_id, __: called.append(app_id) or 0,
+        lambda *args: called.append(args[1]) or 0,
     )
     leaderboard.count_ytd_achievements_for_player("steamid", 2026)
     assert called == [2]
