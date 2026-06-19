@@ -1,6 +1,6 @@
-# Steam YTD Achievement Leaderboard
+# Steam Achievement Hunter
 
-Compare how many Steam achievements you and your friends have earned this calendar year.
+A command-line toolkit for Steam achievements: compare your year-to-date count with friends, browse per-game progress, and generate an AI-powered guide to finish what you started.
 
 ## Setup
 
@@ -36,20 +36,21 @@ All commands are available as installed entry points (`uv run <command>`) or dir
 | Command | Description |
 | --- | --- |
 | `uv run steam-achievements` | YTD achievement leaderboard across you and your friends |
+| `uv run steam-game` | List achievements for a specific game with won/not-won filtering |
+| `uv run steam-platinum` | AI-powered platinum guide for your remaining achievements |
 | `uv run steam-friends` | Browse your friends list with display name, Steam ID, and visibility |
 | `uv run steam-login` | Authenticate and store a session so private game libraries are readable |
 
 ### Authentication note
 
-If your own **Game details** privacy setting is not Public, `steam-achievements` returns
-empty results for your own account. Run `steam-login` once to store a session in your OS
-keychain (Windows Credential Manager / macOS Keychain / Linux Secret Service) — no
-profile changes required. The session also lets you omit `STEAM_ID` from `.env` entirely.
+If your own **Game details** privacy setting is not Public, `steam-achievements`, `steam-game`, and `steam-platinum` all return empty results for your own account. Run `steam-login` once to store a session in your OS keychain (Windows Credential Manager / macOS Keychain / Linux Secret Service) — no profile changes required. The session also lets you omit `STEAM_ID` from `.env` entirely.
 
 > **Note:** This only unlocks *your own* data. Friends with private profiles still
 > show 0 — there is no bypass without their session.
 
 ## How it works
+
+### `steam-achievements`
 
 1. Fetches your friend list via `GetFriendList` (or `STEAM_FRIENDS` from `.env` if set)
 2. For each player (you + friends), fetches all owned games with playtime > 0
@@ -57,8 +58,15 @@ profile changes required. The session also lets you omit `STEAM_ID` from `.env` 
 4. Filters to achievements where `unlocktime` falls within the target year
 5. Sums and ranks everyone
 
-`--filter` applies before step 2 — only matching friends have their achievements
-fetched, so filtered runs are faster on large friend lists.
+`--filter` applies before step 2 — only matching friends have their achievements fetched, so filtered runs are faster on large friend lists.
+
+### `steam-platinum`
+
+1. Looks up the game's achievement schema via `GetSchemaForGame`
+2. Fetches your unlock status via `GetPlayerAchievements` and computes pending achievements
+3. Optionally fetches a community guide from Steam (used as grounding context for the LLM)
+4. Sends pending achievements + guide to the configured LLM, which returns a structured strategy: categories, tips, ordering, and estimated hours
+5. Saves the result to a local SQLite database (`DATABASE_URL`) for future reference
 
 ## Caveats
 
@@ -68,4 +76,4 @@ fetched, so filtered runs are faster on large friend lists.
 - **Speed**: If a friend owns 500+ played games, their fetch takes 20–60 seconds depending on concurrency. The default of 4 parallel requests per player is safe; bump to 8 if you want speed and Steam doesn't throttle you.
 - **Rate limits**: Steam's API is lenient for personal keys but will 429 you if you hammer it. The script auto-retries with backoff.
 - **App-level privacy**: Some games hide achievements even on public profiles (e.g., adult games). These are silently skipped.
-- **Why the API key can't be dropped**: `ISteamUserStats/GetPlayerAchievements` requires a developer API key — it is not in Steam's OAuth-enabled service list (`ICloudService`, `IBroadcastService`, `IGameNotificationsService`, `IPlayerService`, `IPublishedFileService`) and does not honour user access tokens from `IAuthenticationService`. Third-party sites like SteamDB work the same way: they register their own key and can only read public profiles. The `steam-login` session unlocks your *own* private library via `IPlayerService/GetOwnedGames`, but achievement fetching always goes through the developer key. [Reference: partner.steamgames.com/doc/webapi/isteamuserstats]
+- **Why the Steam API key can't be dropped**: `ISteamUserStats/GetPlayerAchievements` requires a developer API key — it is not in Steam's OAuth-enabled service list (`ICloudService`, `IBroadcastService`, `IGameNotificationsService`, `IPlayerService`, `IPublishedFileService`) and does not honour user access tokens from `IAuthenticationService`. Third-party sites like SteamDB work the same way: they register their own key and can only read public profiles. The `steam-login` session unlocks your *own* private library via `IPlayerService/GetOwnedGames`, but achievement fetching always goes through the developer key. [Reference: partner.steamgames.com/doc/webapi/isteamuserstats]
