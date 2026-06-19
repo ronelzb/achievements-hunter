@@ -31,7 +31,7 @@ def _run(
     players=_PLAYERS,
 ):
     monkeypatch.setattr(steam_friends_cli, "API_KEY", api_key)
-    monkeypatch.setattr(steam_friends_cli, "get_my_id", lambda **_: my_id or session_id)
+    monkeypatch.setattr(steam_friends_cli, "get_my_id", lambda *_: my_id or session_id)
     monkeypatch.setattr(steam_friends_cli, "get_friend_ids", lambda _: friend_ids)
     monkeypatch.setattr(
         steam_friends_cli, "get_player_summaries_bulk_full", lambda _: list(players)

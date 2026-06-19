@@ -54,7 +54,7 @@ def _run(monkeypatch, argv, my_id: str | None = _MY_ID, session_id: str | None =
         return [{"name": "Me", "count": 0, "is_me": True, "steam_id": my_id or ""}]
 
     monkeypatch.setattr(leaderboard_cli, "API_KEY", "REAL_KEY")
-    monkeypatch.setattr(leaderboard_cli, "get_my_id", lambda **_: my_id or session_id)
+    monkeypatch.setattr(leaderboard_cli, "get_my_id", lambda *_: my_id or session_id)
     monkeypatch.setattr(leaderboard_cli, "load_session", lambda: None)
     monkeypatch.setattr(leaderboard_cli, "build_leaderboard", fake_build)
     monkeypatch.setattr(leaderboard_cli, "print_leaderboard", MagicMock())
@@ -92,7 +92,7 @@ def test_main_uses_session_id_when_my_id_not_set(monkeypatch, capsys):
 
 def test_main_prints_error_when_no_steam_id(monkeypatch, capsys):
     monkeypatch.setattr(leaderboard_cli, "API_KEY", "REAL_KEY")
-    monkeypatch.setattr(leaderboard_cli, "get_my_id", lambda **_: None)
+    monkeypatch.setattr(leaderboard_cli, "get_my_id", lambda *_: None)
     monkeypatch.setattr(sys, "argv", ["steam-leaderboard"])
     leaderboard_cli.main()
     assert "STEAM_ID" in capsys.readouterr().out

@@ -54,7 +54,7 @@ def _run(
         player = _PLAYER
 
     monkeypatch.setattr(steam_game_achievements_cli, "API_KEY", api_key)
-    monkeypatch.setattr(steam_game_achievements_cli, "get_my_id", lambda **_: my_id)
+    monkeypatch.setattr(steam_game_achievements_cli, "get_my_id", lambda *_: my_id)
     monkeypatch.setattr(
         steam_game_achievements_cli, "search_apps", lambda _: search_results
     )
@@ -70,7 +70,7 @@ def _run(
     monkeypatch.setattr(
         steam_game_achievements_cli,
         "get_local_achievement_descs",
-        lambda _app_id, **_kw: _local,
+        lambda *_: _local,
     )
     monkeypatch.setattr(steam_http, "DEBUG", False)
     monkeypatch.setattr("builtins.input", lambda _: user_input)
@@ -152,7 +152,7 @@ def test_multiple_results_empty_input_cancels(monkeypatch, capsys):
 def test_app_id_skips_search(monkeypatch, capsys):
     mock_search = MagicMock()
     monkeypatch.setattr(steam_game_achievements_cli, "API_KEY", "REAL_KEY")
-    monkeypatch.setattr(steam_game_achievements_cli, "get_my_id", lambda **_: _MY_ID)
+    monkeypatch.setattr(steam_game_achievements_cli, "get_my_id", lambda *_: _MY_ID)
     monkeypatch.setattr(steam_game_achievements_cli, "search_apps", mock_search)
     monkeypatch.setattr(
         steam_game_achievements_cli,
