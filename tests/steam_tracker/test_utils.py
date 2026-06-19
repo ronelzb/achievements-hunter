@@ -1,7 +1,7 @@
 import base64
 import json
 
-from steam_tracker.utils import decode_token, truncate
+from steam_tracker.utils import decode_token, game_slug, truncate
 
 
 def _make_jwt_cookie(payload: dict) -> str:
@@ -84,3 +84,30 @@ def test_truncate_result_length_equals_width():
 
 def test_truncate_empty_string():
     assert truncate("", 5) == ""
+
+
+# ── game_slug ─────────────────────────────────────────────────────────────────
+
+
+def test_game_slug_lowercases():
+    assert game_slug("Portal").startswith("p")
+
+
+def test_game_slug_replaces_spaces():
+    assert " " not in game_slug("The Evil Within")
+
+
+def test_game_slug_replaces_special_chars():
+    slug = game_slug("Demon's Souls")
+    assert "'" not in slug
+    assert slug == "demon-s-souls"
+
+
+def test_game_slug_no_leading_trailing_dashes():
+    slug = game_slug("  ---Game---  ")
+    assert not slug.startswith("-")
+    assert not slug.endswith("-")
+
+
+def test_game_slug_numbers_preserved():
+    assert "2" in game_slug("Portal 2")

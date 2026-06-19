@@ -87,12 +87,16 @@ class Base(DeclarativeBase):
 
 class GuideText(Base):
     __tablename__ = "guide_text"
-    __table_args__ = (UniqueConstraint("app_id", "version"),)
+    __table_args__ = (
+        UniqueConstraint("app_id", "version"),
+        UniqueConstraint("app_id", "content_hash"),
+    )
 
     app_id: Mapped[int] = mapped_column(INTEGER)
     version: Mapped[int] = mapped_column(SMALLINT)
     source: Mapped[str] = mapped_column(TEXT)
     raw_text: Mapped[str] = mapped_column(TEXT)
+    content_hash: Mapped[str] = mapped_column(TEXT, index=True)
 
 
 class Strategy(Base):
@@ -101,8 +105,8 @@ class Strategy(Base):
 
     app_id: Mapped[int] = mapped_column(INTEGER)
     version: Mapped[int] = mapped_column(SMALLINT)
-    guide_text_id: Mapped[uuid_utils.UUID] = mapped_column(
-        Uuid(), ForeignKey("guide_text.id"), index=True
+    guide_text_id: Mapped[uuid_utils.UUID | None] = mapped_column(
+        Uuid(), ForeignKey("guide_text.id"), index=True, nullable=True
     )
     model: Mapped[str] = mapped_column(TEXT)
     strategy_json: Mapped[dict] = mapped_column(JSON)

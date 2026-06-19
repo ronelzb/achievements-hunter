@@ -45,7 +45,7 @@ def logout() -> None:
             keyring.delete_password(_KEYRING_SERVICE, username)
 
 
-def steam_id_from_session(*, debug: bool = False) -> str | None:
+def steam_id_from_session(debug: bool = False) -> str | None:
     """Extracts the Steam64 ID from the stored session cookie.
 
     Tries the steamid||jwt prefix format first, then falls back to the JWT
@@ -86,9 +86,9 @@ def steam_id_from_session(*, debug: bool = False) -> str | None:
     return None
 
 
-def get_my_id(*, debug: bool = False) -> str | None:
+def get_my_id(debug: bool = False) -> str | None:
     """Returns the user's Steam64 ID from STEAM_ID env var or the stored session cookie."""
-    return MY_ID or steam_id_from_session(debug=debug)
+    return MY_ID or steam_id_from_session(debug)
 
 
 def _token_expiry(cookie: str) -> int | None:
@@ -98,7 +98,7 @@ def _token_expiry(cookie: str) -> int | None:
     return int(exp) if exp is not None else None
 
 
-def validate_session(cookie: str, *, debug: bool = False) -> bool:
+def validate_session(cookie: str, debug: bool = False) -> bool:
     """Returns True if the session cookie still grants access to steamcommunity.com."""
     exp = _token_expiry(cookie)
     if exp is not None and time.time() > exp:
@@ -168,7 +168,7 @@ def _select_and_submit_guard(
         submit_guard_code(client_id, steam_id, code, code_type=2)
 
 
-def login(username: str, password: str, *, debug: bool = False) -> str:
+def login(username: str, password: str, debug: bool = False) -> str:
     """Full login flow using Steam's current auth API. Returns the steamLoginSecure cookie value."""
     rsa_data = get_rsa_key(username)
     encrypted = encrypt_password(
@@ -191,7 +191,7 @@ def login(username: str, password: str, *, debug: bool = False) -> str:
 
     refresh_token = poll_auth_session(client_id, request_id, interval)
     save_refresh_token(refresh_token)
-    return finalize_session(refresh_token, steam_id, debug=debug)
+    return finalize_session(refresh_token, steam_id, debug)
 
 
 def main() -> None:
@@ -214,7 +214,7 @@ def main() -> None:
         return
 
     existing = load_session()
-    if existing and validate_session(existing, debug=args.debug):
+    if existing and validate_session(existing, args.debug):
         print("Already logged in — session is valid.")
         return
 
@@ -224,7 +224,7 @@ def main() -> None:
     password = getpass.getpass("Password: ")
 
     try:
-        cookie = login(username, password, debug=args.debug)
+        cookie = login(username, password, args.debug)
         save_session(cookie)
         print("Login successful — session saved to keychain.")
     except RuntimeError as error:

@@ -110,6 +110,37 @@ def test_multiple_guide_rows_accumulate():
         assert session.query(GuideText).filter_by(app_id=42).count() == 3
 
 
+def test_save_guide_returns_existing_row_on_duplicate_content():
+    with db_module.get_session() as session:
+        r1 = save_guide(session, app_id=1, source="url1", raw_text="same content")
+        r2 = save_guide(session, app_id=1, source="url2", raw_text="same content")
+        assert r1.id == r2.id
+        assert session.query(GuideText).filter_by(app_id=1).count() == 1
+
+
+def test_save_guide_dedup_does_not_increment_version():
+    with db_module.get_session() as session:
+        r1 = save_guide(session, app_id=1, source="u", raw_text="same")
+        r2 = save_guide(session, app_id=1, source="u", raw_text="same")
+        assert r1.version == r2.version == 1
+
+
+def test_save_guide_stores_content_hash():
+    from steam_tracker.utils import content_hash
+
+    with db_module.get_session() as session:
+        row = save_guide(session, app_id=1, source="u", raw_text="hello")
+        assert row.content_hash == content_hash("hello")
+
+
+def test_save_guide_dedup_is_per_app_id():
+    with db_module.get_session() as session:
+        r1 = save_guide(session, app_id=1, source="u", raw_text="same content")
+        r2 = save_guide(session, app_id=2, source="u", raw_text="same content")
+        assert r1.id != r2.id
+        assert r1.version == r2.version == 1
+
+
 # ── Strategy ──────────────────────────────────────────────────────────────────
 
 

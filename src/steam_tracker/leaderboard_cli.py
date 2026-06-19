@@ -83,7 +83,7 @@ def main() -> None:
 
     steam_http.DEBUG = args.debug
 
-    my_id = get_my_id(debug=args.debug)
+    my_id = get_my_id(args.debug)
     if API_KEY == "YOUR_API_KEY_HERE" or not my_id:
         console.print(
             "❌  Please set STEAM_API_KEY in .env and, either STEAM_ID or run steam-login first."
@@ -95,7 +95,7 @@ def main() -> None:
     if not raw:
         if args.debug:
             print("[debug] no session cookie in keyring — run steam-login first")
-    elif not validate_session(raw, debug=args.debug):
+    elif not validate_session(raw, args.debug):
         if args.debug:
             print(
                 "[debug] session invalid — using public endpoints (re-run steam-login)"
@@ -105,7 +105,7 @@ def main() -> None:
         if refresh_token:
             try:
                 api_token, new_refresh = generate_api_access_token(
-                    refresh_token, my_id, debug=args.debug
+                    refresh_token, my_id, args.debug
                 )
                 if new_refresh:
                     save_refresh_token(new_refresh)

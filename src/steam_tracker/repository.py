@@ -4,6 +4,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .db import GuideText, Strategy
+from .utils import content_hash
 
 
 def _next_version(session: Session, model: type, app_id: int) -> int:
@@ -21,11 +22,20 @@ def get_latest_guide(session: Session, app_id: int) -> GuideText | None:
 
 
 def save_guide(session: Session, app_id: int, source: str, raw_text: str) -> GuideText:
+    digest = content_hash(raw_text)
+    existing = (
+        session.query(GuideText)
+        .filter_by(app_id=app_id, content_hash=digest, deleted=False)
+        .first()
+    )
+    if existing is not None:
+        return existing
     row = GuideText(
         app_id=app_id,
         version=_next_version(session, GuideText, app_id),
         source=source,
         raw_text=raw_text,
+        content_hash=digest,
     )
     session.add(row)
     session.commit()
@@ -45,18 +55,18 @@ def get_latest_strategy(session: Session, app_id: int) -> Strategy | None:
 def save_strategy(
     session: Session,
     app_id: int,
-    guide_text: GuideText,
+    guide_text: GuideText | None,
     model: str,
     strategy_json: dict,
 ) -> Strategy:
-    if guide_text.app_id != app_id:
+    if guide_text is not None and guide_text.app_id != app_id:
         raise ValueError(
             f"guide_text.app_id {guide_text.app_id} does not match app_id {app_id}"
         )
     row = Strategy(
         app_id=app_id,
         version=_next_version(session, Strategy, app_id),
-        guide_text_id=guide_text.id,
+        guide_text_id=guide_text.id if guide_text is not None else None,
         model=model,
         strategy_json=strategy_json,
     )

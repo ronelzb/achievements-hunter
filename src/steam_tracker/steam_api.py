@@ -110,7 +110,7 @@ def get_owned_games(steam_id: str) -> list[dict]:
 
 
 def generate_api_access_token(
-    refresh_token: str, steam_id: str, *, debug: bool = False
+    refresh_token: str, steam_id: str, debug: bool = False
 ) -> tuple[str, str | None]:
     """Exchanges a refresh token for a short-lived Web API access token.
 
@@ -316,7 +316,7 @@ def poll_auth_session(client_id: str, request_id: str, interval: float = 5.0) ->
     raise RuntimeError("Login timed out waiting for Steam Guard approval.")
 
 
-def finalize_session(refresh_token: str, steam_id: str, *, debug: bool = False) -> str:
+def finalize_session(refresh_token: str, steam_id: str, debug: bool = False) -> str:
     """Exchanges a refresh token for the steamcommunity.com steamLoginSecure cookie.
 
     Steam's finalize flow is two-phase: POST to /jwt/finalizelogin returns a
@@ -490,7 +490,7 @@ def _find_steam_path() -> Path | None:
     return None
 
 
-def get_local_achievement_descs(app_id: int, *, debug: bool = False) -> dict[str, str]:
+def get_local_achievement_descs(app_id: int, debug: bool = False) -> dict[str, str]:
     """Returns {api_name: description} from the local Steam schema cache.
 
     Reads UserGameStatsSchema_{app_id}.bin from Steam's appcache/stats directory.

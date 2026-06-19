@@ -174,7 +174,7 @@ def main() -> None:
 
     steam_http.DEBUG = args.debug
 
-    my_id = get_my_id(debug=args.debug)
+    my_id = get_my_id(args.debug)
     if API_KEY == "YOUR_API_KEY_HERE" or not my_id:
         console.print(
             "❌  Please set STEAM_API_KEY in .env and either set STEAM_ID or run steam-login."
@@ -213,7 +213,7 @@ def main() -> None:
         )
         return
 
-    local_descs = get_local_achievement_descs(app_id, debug=args.debug)
+    local_descs = get_local_achievement_descs(app_id, args.debug)
     _print_table(
         schema,
         player,

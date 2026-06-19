@@ -18,7 +18,13 @@ import inspect
 
 import vdf
 
-from steam_tracker.parser import BytesParser, Parser, SteamAchievementSchemaParser
+from steam_tracker.parser import (
+    BytesParser,
+    HtmlParser,
+    InMemoryParser,
+    Parser,
+    SteamAchievementSchemaParser,
+)
 
 # ── hierarchy ─────────────────────────────────────────────────────────────────
 
@@ -33,6 +39,22 @@ def test_bytes_parser_is_abstract():
 
 def test_bytes_parser_extends_parser():
     assert issubclass(BytesParser, Parser)
+
+
+def test_in_memory_parser_is_abstract():
+    assert inspect.isabstract(InMemoryParser)
+
+
+def test_in_memory_parser_extends_parser():
+    assert issubclass(InMemoryParser, Parser)
+
+
+def test_html_parser_extends_in_memory_parser():
+    assert issubclass(HtmlParser, InMemoryParser)
+
+
+def test_html_parser_is_concrete():
+    assert not inspect.isabstract(HtmlParser)
 
 
 def test_steam_achievement_schema_parser_extends_bytes_parser():
@@ -51,7 +73,7 @@ def _make_vdf(stats: dict) -> bytes:
     return vdf.binary_dumps({"stats": stats})
 
 
-def _make_ach(name: str, desc: str, *, hidden: str = "0") -> dict:
+def _make_ach(name: str, desc: str, hidden: str = "0") -> dict:
     return {
         "name": name,
         "display": {
@@ -156,6 +178,62 @@ def test_entry_with_empty_description_is_skipped():
 def test_entry_without_name_is_skipped():
     raw = _make_vdf({"1": {"display": {"desc": {"english": "Some desc"}}}})
     assert SteamAchievementSchemaParser().parse(raw) == {}
+
+
+# ── HtmlParser ────────────────────────────────────────────────────────────────
+
+
+def test_html_parser_strips_tags():
+    assert HtmlParser().parse("<p>Hello</p>") == "Hello"
+
+
+def test_html_parser_unescapes_entities():
+    result = HtmlParser().parse("&amp;")
+    assert "&amp;" not in result
+    assert "&" in result
+
+
+def test_html_parser_collapses_whitespace():
+    assert "  " not in HtmlParser().parse("foo   bar")
+
+
+def test_html_parser_collapses_excess_newlines():
+    assert "\n\n\n" not in HtmlParser().parse("a\n\n\n\nb")
+
+
+def test_html_parser_strips_surrounding_whitespace():
+    result = HtmlParser().parse("  <p>text</p>  ")
+    assert result == result.strip()
+
+
+def test_html_parser_empty_input():
+    assert HtmlParser().parse("") == ""
+
+
+def test_html_parser_strips_script_content():
+    source = '<p>Guide</p><script>var g_sessionID = "abc123";</script><p>More</p>'
+    result = HtmlParser().parse(source)
+    assert "g_sessionID" not in result
+    assert "Guide" in result
+    assert "More" in result
+
+
+def test_html_parser_strips_style_content():
+    source = "<p>Text</p><style>.cls { color: red; }</style><p>After</p>"
+    result = HtmlParser().parse(source)
+    assert "color" not in result
+    assert "Text" in result
+    assert "After" in result
+
+
+def test_html_parser_script_stripping_is_case_insensitive():
+    source = "<SCRIPT>var x = 1;</SCRIPT><p>real content</p>"
+    result = HtmlParser().parse(source)
+    assert "var x" not in result
+    assert "real content" in result
+
+
+# ── SteamAchievementSchemaParser ──────────────────────────────────────────────
 
 
 def test_non_dict_stat_entry_is_skipped():

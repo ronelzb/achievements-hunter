@@ -1,5 +1,7 @@
-"""Parser hierarchy for steam_tracker binary file formats."""
+"""Parser hierarchy for steam_tracker."""
 
+import html
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -19,6 +21,17 @@ class Parser[T](ABC):
         """Parse *source* and return a typed output."""
 
 
+class InMemoryParser[T](Parser[T], ABC):
+    """Strategy interface for parsers that operate on in-memory string content.
+
+    Use when the source is already decoded text rather than a file path or bytes.
+    """
+
+    @abstractmethod
+    def parse(self, source: str) -> T:
+        """Parse *source* string and return a typed output."""
+
+
 class BytesParser[T](Parser[T], ABC):
     """Strategy interface for parsers that operate on raw bytes.
 
@@ -29,6 +42,26 @@ class BytesParser[T](Parser[T], ABC):
     @abstractmethod
     def parse(self, source: bytes) -> T:
         """Parse *source* bytes and return a typed output."""
+
+
+class HtmlParser(InMemoryParser[str]):
+    """Strips HTML tags and normalises whitespace to produce plain text.
+
+    Used to clean scraped web pages.
+    """
+
+    def parse(self, source: str) -> str:
+        text = re.sub(
+            r"<(script|style)[^>]*>.*?</(script|style)>",
+            " ",
+            source,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = html.unescape(text)
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
 
 
 class SteamAchievementSchemaParser(BytesParser[dict[str, str]]):

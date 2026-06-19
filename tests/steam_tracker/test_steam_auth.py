@@ -178,7 +178,7 @@ def test_steam_id_from_session_falls_back_to_jwt_sub_claim(monkeypatch):
 
 def test_steam_id_from_session_debug_prints_when_no_cookie(monkeypatch, capsys):
     monkeypatch.setattr(steam_auth.keyring, "get_password", lambda *_: None)
-    steam_auth.steam_id_from_session(debug=True)
+    steam_auth.steam_id_from_session(True)
     assert "no session cookie" in capsys.readouterr().out
 
 

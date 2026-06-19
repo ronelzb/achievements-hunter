@@ -1,3 +1,14 @@
+"""Steam API and Community HTTP calls.
+
+Handles authentication, API-key headers, per-endpoint retries, and
+rate-limit backoff for Steam's own services (api.steampowered.com,
+steamcommunity.com, store.steampowered.com).
+
+For fetching arbitrary third-party URLs (e.g. achievement-guide sites)
+see web_http.py, which does browser-impersonation scraping without any
+Steam-specific auth or retry logic.
+"""
+
 import threading
 import time
 
@@ -14,7 +25,7 @@ AUTH_API = f"{BASE}/IAuthenticationService"
 FINALIZE_URL = "https://login.steampowered.com/jwt/finalizelogin"
 
 
-def auth_post(endpoint: str, data: dict, *, timeout: int = 15) -> requests.Response:
+def auth_post(endpoint: str, data: dict, timeout: int = 15) -> requests.Response:
     """POST to IAuthenticationService. `endpoint` is the method name without the /v1 suffix."""
     return requests.post(f"{AUTH_API}/{endpoint}/v1", data=data, timeout=timeout)
 
@@ -85,9 +96,7 @@ def _api_get(endpoint: str, params: dict, retries: int) -> dict | None:
     return None
 
 
-def store_get(
-    path: str, params: dict | None = None, *, timeout: int = 10
-) -> dict | None:
+def store_get(path: str, params: dict | None = None, timeout: int = 10) -> dict | None:
     """GET a store.steampowered.com path. Returns None on any network or HTTP error."""
     try:
         response = requests.get(f"{STORE}/{path}", params=params or {}, timeout=timeout)
@@ -103,7 +112,7 @@ def get(endpoint: str, params: dict, retries: int = 3) -> dict | None:
 
 
 def get_authed(
-    endpoint: str, params: dict, *, access_token: str, retries: int = 3
+    endpoint: str, params: dict, access_token: str, retries: int = 3
 ) -> dict | None:
     """Like get() but authenticates with a user OAuth access token instead of the developer API key."""
     return _api_get(endpoint, {**params, "access_token": access_token}, retries)

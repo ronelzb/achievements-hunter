@@ -32,7 +32,7 @@ def main() -> None:
     args = parser.parse_args()
     steam_http.DEBUG = args.debug
 
-    my_id = get_my_id(debug=args.debug)
+    my_id = get_my_id(args.debug)
     if API_KEY == "YOUR_API_KEY_HERE" or not my_id:
         console.print(
             "❌  Please set STEAM_API_KEY in .env and, either STEAM_ID or run steam-login first."

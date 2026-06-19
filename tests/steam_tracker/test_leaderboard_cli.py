@@ -46,9 +46,7 @@ def test_print_leaderboard_celebrates_first_place(capsys):
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _run(
-    monkeypatch, argv, *, my_id: str | None = _MY_ID, session_id: str | None = None
-):
+def _run(monkeypatch, argv, my_id: str | None = _MY_ID, session_id: str | None = None):
     captured: dict = {}
 
     def fake_build(**kwargs):
