@@ -43,6 +43,7 @@ def _run(
     search_results=None,
     schema=None,
     player=_DEFAULT,
+    local_descs=None,
     user_input="",
 ):
     if search_results is None:
@@ -64,6 +65,12 @@ def _run(
         steam_game_achievements_cli,
         "get_all_player_achievements",
         lambda *_: player,
+    )
+    _local = local_descs if local_descs is not None else {}
+    monkeypatch.setattr(
+        steam_game_achievements_cli,
+        "get_local_achievement_descs",
+        lambda _app_id, **_kw: _local,
     )
     monkeypatch.setattr(steam_http, "DEBUG", False)
     monkeypatch.setattr("builtins.input", lambda _: user_input)
@@ -280,6 +287,69 @@ def test_reveal_hidden_clears_placeholder_when_no_description(monkeypatch, capsy
         player=player,
     )
     assert "(Hidden)" not in capsys.readouterr().out
+
+
+# ── [SteamCache] indicator ────────────────────────────────────────────────────
+
+
+def test_local_desc_shown_with_cache_indicator_for_not_won(monkeypatch, capsys):
+    schema = [
+        {"name": "ACH_SECRET", "displayName": "Secret", "description": "", "hidden": 0}
+    ]
+    player = [{"apiname": "ACH_SECRET", "achieved": 0, "unlocktime": 0}]
+    _run(
+        monkeypatch,
+        schema=(_GAME_NAME, schema),
+        player=player,
+        local_descs={"ACH_SECRET": "From local cache."},
+    )
+    out = capsys.readouterr().out
+    assert "From local cache." in out
+    assert "[SteamCache]" in out
+
+
+def test_local_desc_shown_with_cache_indicator_when_won(monkeypatch, capsys):
+    schema = [
+        {"name": "ACH_SECRET", "displayName": "Secret", "description": "", "hidden": 0}
+    ]
+    player = [
+        {
+            "apiname": "ACH_SECRET",
+            "achieved": 1,
+            "unlocktime": 1700000000,
+            "description": "",
+        }
+    ]
+    _run(
+        monkeypatch,
+        schema=(_GAME_NAME, schema),
+        player=player,
+        local_descs={"ACH_SECRET": "From local cache."},
+    )
+    out = capsys.readouterr().out
+    assert "From local cache." in out
+    assert "[SteamCache]" in out
+
+
+def test_local_desc_not_used_when_schema_desc_present(monkeypatch, capsys):
+    schema = [
+        {
+            "name": "ACH_WIN",
+            "displayName": "First Win",
+            "description": "Win a game",
+            "hidden": 0,
+        }
+    ]
+    player = [{"apiname": "ACH_WIN", "achieved": 0, "unlocktime": 0}]
+    _run(
+        monkeypatch,
+        schema=(_GAME_NAME, schema),
+        player=player,
+        local_descs={"ACH_WIN": "Local override."},
+    )
+    out = capsys.readouterr().out
+    assert "Win a game" in out
+    assert "[SteamCache]" not in out
 
 
 # ── --filter ──────────────────────────────────────────────────────────────────

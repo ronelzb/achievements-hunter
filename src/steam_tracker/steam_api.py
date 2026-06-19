@@ -1,10 +1,14 @@
+import os
+import platform
 import secrets
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 
 import requests
 
 from .config import FRIENDS_OVERRIDE
+from .parser import SteamAchievementSchemaParser
 from .steam_http import (
     COMMUNITY,
     FINALIZE_URL,
@@ -425,6 +429,132 @@ def get_all_player_achievements(steam_id: str, app_id: int) -> list[dict] | None
     if not playerstats.get("success"):
         return None
     return playerstats.get("achievements", [])
+
+
+def _find_steam_path() -> Path | None:
+    """Locates the Steam installation directory via env var, registry (Windows), or known paths.
+
+    Resolution order:
+      1. STEAM_DIR environment variable (explicit override, all platforms)
+      2. Windows registry: HKCU then HKLM (covers per-user and system-wide installs)
+      3. Hardcoded fallbacks per platform
+    """
+    steam_dir_env = os.environ.get("STEAM_DIR")
+    if steam_dir_env:
+        p = Path(steam_dir_env)
+        if p.exists():
+            return p
+
+    system = platform.system()
+    if system == "Windows":
+        try:
+            import winreg  # type: ignore[import-not-found]
+
+            _registry_candidates = [
+                (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath"),
+                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam", "InstallPath"),
+                (
+                    winreg.HKEY_LOCAL_MACHINE,
+                    r"SOFTWARE\WOW6432Node\Valve\Steam",
+                    "InstallPath",
+                ),
+            ]
+            for hive, subkey, value in _registry_candidates:
+                try:
+                    with winreg.OpenKey(hive, subkey) as key:
+                        raw, _ = winreg.QueryValueEx(key, value)
+                        p = Path(str(raw))
+                        if p.exists():
+                            return p
+                except OSError:
+                    continue
+        except OSError:
+            pass
+        for fallback in (
+            Path("C:/Program Files (x86)/Steam"),
+            Path("C:/Program Files/Steam"),
+        ):
+            if fallback.exists():
+                return fallback
+    elif system == "Linux":
+        for candidate in (
+            Path.home() / ".steam/steam",
+            Path.home() / ".local/share/Steam",
+        ):
+            if candidate.exists():
+                return candidate
+    elif system == "Darwin":
+        p = Path.home() / "Library/Application Support/Steam"
+        if p.exists():
+            return p
+    return None
+
+
+def get_local_achievement_descs(app_id: int, *, debug: bool = False) -> dict[str, str]:
+    """Returns {api_name: description} from the local Steam schema cache.
+
+    Reads UserGameStatsSchema_{app_id}.bin from Steam's appcache/stats directory.
+    This file contains full achievement descriptions including hidden ones that
+    GetSchemaForGame omits for some games. Returns {} if Steam is not found, the
+    file does not exist, or parsing fails.
+    """
+    steam_path = _find_steam_path()
+    if steam_path is None:
+        if debug:
+            print("[debug] local schema cache: Steam installation not found")
+        return {}
+    schema_file = (
+        steam_path / "appcache" / "stats" / f"UserGameStatsSchema_{app_id}.bin"
+    )
+    if debug:
+        status = "found" if schema_file.exists() else "not found"
+        print(f"[debug] local schema cache: {schema_file} ({status})")
+    if not schema_file.exists():
+        return {}
+    raw = schema_file.read_bytes()
+    if debug:
+        try:
+            import vdf as _vdf
+
+            data = _vdf.binary_loads(raw)
+            top_keys = list(data.keys())
+            print(f"[debug] raw VDF top-level keys: {top_keys}")
+            stats = data.get("stats") or next(
+                (
+                    wrapper["stats"]
+                    for wrapper in data.values()
+                    if isinstance(wrapper, dict) and "stats" in wrapper
+                ),
+                None,
+            )
+            if stats:
+                first_key = next(iter(stats))
+                first_stat = stats[first_key]
+                stat_keys = (
+                    list(first_stat.keys())
+                    if isinstance(first_stat, dict)
+                    else repr(type(first_stat))
+                )
+                print(f"[debug] first stat entry ({first_key!r}) keys: {stat_keys}")
+                if isinstance(first_stat, dict) and "bits" in first_stat:
+                    bits = first_stat["bits"]
+                    first_bit_key = next(iter(bits))
+                    bit_keys = (
+                        list(bits[first_bit_key].keys())
+                        if isinstance(bits[first_bit_key], dict)
+                        else repr(type(bits[first_bit_key]))
+                    )
+                    print(
+                        f"[debug] first bit entry ({first_bit_key!r}) keys: {bit_keys}"
+                    )
+            else:
+                print("[debug] no 'stats' key found in VDF")
+        except Exception as exc:
+            print(f"[debug] raw VDF parse error: {exc}")
+    descs = SteamAchievementSchemaParser().parse(raw)
+    if debug:
+        print(f"[debug] local schema cache: loaded {len(descs)} description(s)")
+    return descs
 
 
 def get_ytd_achievement_count(steam_id: str, app_id: int, year: int) -> int:

@@ -4,10 +4,16 @@ from datetime import UTC, datetime
 from rich import box
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 from . import steam_http
 from .config import API_KEY
-from .steam_api import get_all_player_achievements, get_game_schema, search_apps
+from .steam_api import (
+    get_all_player_achievements,
+    get_game_schema,
+    get_local_achievement_descs,
+    search_apps,
+)
 from .steam_auth import get_my_id
 
 console = Console(highlight=False, markup=False)
@@ -49,8 +55,10 @@ def _print_table(
     game_name: str,
     app_id: int,
     reveal_hidden: bool = False,
+    local_descs: dict[str, str] | None = None,
 ) -> None:
     player_map = {a["apiname"]: a for a in player}
+    local_map = local_descs or {}
 
     merged = []
     for schema_idx, ach in enumerate(schema, start=1):
@@ -61,19 +69,23 @@ def _print_table(
         display_name = ach.get("displayName") or ach["name"]
         schema_desc = ach.get("description") or ""
         player_desc = p.get("description") or ""
+        local_desc = local_map.get(key, "")
         is_hidden = bool(ach.get("hidden"))
         if achieved:
-            # Player endpoint returns the real description after unlock
-            description = player_desc or schema_desc
+            from_local = not (player_desc or schema_desc) and bool(local_desc)
+            description = player_desc or schema_desc or local_desc
         elif is_hidden and not reveal_hidden:
+            from_local = False
             description = "(Hidden)"
         else:
-            description = schema_desc
+            from_local = not schema_desc and bool(local_desc)
+            description = schema_desc or local_desc
         merged.append(
             {
                 "schema_idx": schema_idx,
                 "name": display_name,
                 "description": description,
+                "from_local": from_local,
                 "achieved": achieved,
                 "unlocktime": unlock_ts,
             }
@@ -117,7 +129,11 @@ def _print_table(
             )
         else:
             unlocked = "—"
-        table.add_row(num, status, ach["name"], ach["description"], unlocked)
+        if ach["from_local"]:
+            desc_cell = Text.assemble(("[SteamCache] ", "dim"), ach["description"])
+        else:
+            desc_cell = Text(ach["description"])
+        table.add_row(num, status, ach["name"], desc_cell, unlocked)
 
     console.print()
     console.print(table)
@@ -197,6 +213,7 @@ def main() -> None:
         )
         return
 
+    local_descs = get_local_achievement_descs(app_id, debug=args.debug)
     _print_table(
         schema,
         player,
@@ -205,4 +222,5 @@ def main() -> None:
         game_name=app_name,
         app_id=app_id,
         reveal_hidden=args.reveal_hidden,
+        local_descs=local_descs,
     )

@@ -15,6 +15,7 @@ dependencies = [
     "rsa>=4.9",
     "keyring>=25.0",
     "rich>=13.0",
+    "vdf>=3.4",
 ]
 
 [project.scripts]
