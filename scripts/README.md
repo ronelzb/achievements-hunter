@@ -123,6 +123,54 @@ Zephyr                       John Doe               76561198000000001   Public
   2 friend(s) listed.
 ```
 
+## `steam-platinum` — AI-powered platinum guide
+
+Fetches your remaining achievements for a game, optionally pulls a community guide, and asks an LLM to produce a structured platinum strategy: categorised tips, ordering, and estimated hours. Requires `LLM_PROVIDER` and the matching API key in `.env`.
+
+```bash
+# Search by name
+uv run steam-platinum "Elden Ring"
+
+# Skip search with a known App ID
+uv run steam-platinum --app-id 1245620
+
+# Skip web guide fetch; rely on AI training knowledge only
+uv run steam-platinum "Elden Ring" --no-guide
+
+# Print HTTP errors and guide source URLs
+uv run steam-platinum "Elden Ring" --debug
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `query` | — | Game name to search on the Steam store |
+| `--app-id ID` | — | Steam App ID; skips the search step |
+| `--no-guide` | off | Skip web guide fetch; use AI training knowledge only |
+| `--debug` / `-d` | off | Print HTTP errors and guide source URLs |
+
+```text
+Elden Ring  |  34/42 achieved  |  8 remaining
+
+Fetching achievement guide...
+  Source: https://steamcommunity.com/...
+Generating platinum strategy...
+Strategy saved to database.
+
+────────────────────────────────────────────────────────────
+  Elden Ring — Platinum Strategy
+  Minimum runs: 2  •  Est. hours: 8–12
+────────────────────────────────────────────────────────────
+
+[MISSABLE]  Missable NPC Questlines
+  Complete before triggering final boss...
+
+  o  Legendary Armaments
+     Collect all 9 legendary weapons — see Fextralife map.
+     -> https://eldenring.wiki.fextralife.com/...
+```
+
+> **Requires:** `steam-login` session (to read your achievement progress). Configure `LLM_PROVIDER`, `LLM_MODEL`, and the matching API key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`) in `.env`. Results are cached in the SQLite database (`DATABASE_URL`).
+
 ## `steam-login` — authenticate as yourself
 
 Stores a session cookie in your OS keychain (Windows Credential Manager / macOS
