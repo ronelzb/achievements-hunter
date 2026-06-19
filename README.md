@@ -17,21 +17,17 @@ Go to <https://steamcommunity.com/dev/apikey> — it's free and instant.
 
 ### 3. Configure credentials
 
-Create a `.env` file in the project root:
+Copy the example file and fill in your values:
 
-```env
-STEAM_API_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```bash
+# bash / macOS / Linux
+cp .env.example .env
 
-# Optional — if omitted, your Steam64 ID is read automatically from the
-# session stored by steam-login (see Usage below).
-# STEAM_ID=76561198XXXXXXXXX
-
-# Optional — required if your Steam friends list is not set to Public.
-# Comma-separated vanity names (steamcommunity.com/id/NAME) or Steam64 IDs.
-# STEAM_FRIENDS=somevanityname,anotherplayer,76561198009876543
+# PowerShell (Windows)
+Copy-Item .env.example .env
 ```
 
-The scripts read `.env` on every run — no shell exports or restarts needed.
+All available variables and their descriptions are documented in [.env.example](.env.example). The scripts read `.env` on every run — no shell exports or restarts needed.
 
 ## Usage
 
