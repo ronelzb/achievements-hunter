@@ -15,8 +15,8 @@ FRIENDS_OVERRIDE = [
 DATABASE_URL = _env.get("DATABASE_URL") or "sqlite:///data/platinum.db"
 
 # LLM
-LLM_PROVIDER = _env.get("LLM_PROVIDER", "")
-LLM_MODEL = _env.get("LLM_MODEL", "")
+LLM_PROVIDER = _env.get("LLM_PROVIDER") or ""
+LLM_MODEL = _env.get("LLM_MODEL") or ""
 LLM_MAX_TOKENS = int(_env.get("LLM_MAX_TOKENS") or 3000)
-ANTHROPIC_API_KEY = _env.get("ANTHROPIC_API_KEY", "")
-OPENAI_API_KEY = _env.get("OPENAI_API_KEY", "")
+ANTHROPIC_API_KEY = _env.get("ANTHROPIC_API_KEY") or ""
+OPENAI_API_KEY = _env.get("OPENAI_API_KEY") or ""
