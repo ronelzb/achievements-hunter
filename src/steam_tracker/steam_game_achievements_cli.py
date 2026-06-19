@@ -7,7 +7,7 @@ from rich.table import Table
 from rich.text import Text
 
 from . import steam_http
-from .config import API_KEY
+from .settings import API_KEY
 from .steam_api import (
     get_all_player_achievements,
     get_game_schema,

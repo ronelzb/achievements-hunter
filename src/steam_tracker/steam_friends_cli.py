@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import steam_http
-from .config import API_KEY
+from .settings import API_KEY
 from .steam_api import (
     filter_by_display_name,
     get_friend_ids,

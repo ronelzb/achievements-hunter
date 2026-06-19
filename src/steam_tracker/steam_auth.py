@@ -7,7 +7,7 @@ import time
 import keyring
 import rsa
 
-from .config import MY_ID
+from .settings import MY_ID
 from .steam_api import (
     begin_auth,
     finalize_session,

@@ -6,8 +6,8 @@ from rich.console import Console
 from rich.table import Table
 
 from . import steam_http
-from .config import API_KEY
 from .leaderboard import build_leaderboard
+from .settings import API_KEY
 from .steam_api import generate_api_access_token
 from .steam_auth import (
     get_my_id,

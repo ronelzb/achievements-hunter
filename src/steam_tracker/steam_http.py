@@ -3,7 +3,7 @@ import time
 
 import requests
 
-from .config import API_KEY
+from .settings import API_KEY
 
 DEBUG = False
 _tls = threading.local()  # per-thread context for debug labels

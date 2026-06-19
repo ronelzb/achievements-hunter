@@ -7,8 +7,8 @@ from pathlib import Path
 
 import requests
 
-from .config import FRIENDS_OVERRIDE
 from .parser import SteamAchievementSchemaParser
+from .settings import FRIENDS_OVERRIDE
 from .steam_http import (
     COMMUNITY,
     FINALIZE_URL,
