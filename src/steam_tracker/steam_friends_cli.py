@@ -1,5 +1,9 @@
 import argparse
 
+from rich import box
+from rich.console import Console
+from rich.table import Table
+
 from . import steam_http
 from .config import API_KEY
 from .steam_api import (
@@ -8,9 +12,9 @@ from .steam_api import (
     get_player_summaries_bulk_full,
 )
 from .steam_auth import get_my_id
-from .utils import truncate
 
 _VISIBILITY = {1: "Private", 2: "Friends only", 3: "Public"}
+console = Console(highlight=False, markup=False)
 
 
 def main() -> None:
@@ -30,14 +34,16 @@ def main() -> None:
 
     my_id = get_my_id(debug=args.debug)
     if API_KEY == "YOUR_API_KEY_HERE" or not my_id:
-        print(
+        console.print(
             "❌  Please set STEAM_API_KEY in .env and, either STEAM_ID or run steam-login first."
         )
         return
 
     friend_ids = get_friend_ids(my_id)
     if not friend_ids:
-        print("No friends found (check your Steam friends list privacy settings).")
+        console.print(
+            "No friends found (check your Steam friends list privacy settings)."
+        )
         return
 
     players = get_player_summaries_bulk_full(friend_ids)
@@ -55,29 +61,21 @@ def main() -> None:
         players = [p for p in players if p["steamid"] in matched_set]
 
     if not players:
-        print("No friends match the filter.")
+        console.print("No friends match the filter.")
         return
 
-    name_w, real_w, id_w, vis_w = 28, 22, 19, 13
-    header = (
-        f"{'Display Name':<{name_w}} "
-        f"{'Real Name':<{real_w}} "
-        f"{'Steam64 ID':<{id_w}} "
-        f"{'Visibility':<{vis_w}}"
-    )
-    print(f"\n{header}")
-    print("─" * len(header))
+    table = Table(box=box.SIMPLE_HEAD, show_edge=False, pad_edge=False)
+    table.add_column("Display Name")
+    table.add_column("Real Name")
+    table.add_column("Steam64 ID", no_wrap=True)
+    table.add_column("Visibility", no_wrap=True)
 
     for player in players:
-        display = truncate(player.get("personaname", player["steamid"]), name_w)
-        real = truncate(player.get("realname", ""), real_w)
-        steam_id = player["steamid"]
+        display = player.get("personaname", player["steamid"])
+        real = player.get("realname", "") or "—"
         vis = _VISIBILITY.get(player.get("communityvisibilitystate", 1), "Unknown")
-        print(
-            f"{display:<{name_w}} "
-            f"{real or '—':<{real_w}} "
-            f"{steam_id:<{id_w}} "
-            f"{vis:<{vis_w}}"
-        )
+        table.add_row(display, real, player["steamid"], vis)
 
-    print(f"\n  {len(players)} friend(s) listed.")
+    console.print()
+    console.print(table)
+    console.print(f"  {len(players)} friend(s) listed.")

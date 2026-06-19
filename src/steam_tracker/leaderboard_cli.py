@@ -1,6 +1,10 @@
 import argparse
 from datetime import datetime
 
+from rich import box
+from rich.console import Console
+from rich.table import Table
+
 from . import steam_http
 from .config import API_KEY
 from .leaderboard import build_leaderboard
@@ -13,15 +17,22 @@ from .steam_auth import (
     validate_session,
 )
 
+console = Console(highlight=False, markup=False)
+
 
 def print_leaderboard(results: list[dict], year: int) -> None:
-    print(f"\n{'Rank':<5} {'Player':<28} {'Achievements':>12}")
-    print("─" * 48)
+    table = Table(box=box.SIMPLE_HEAD, show_edge=False, pad_edge=False)
+    table.add_column("Rank", no_wrap=True)
+    table.add_column("Player")
+    table.add_column("Achievements", justify="right", no_wrap=True)
+
     for rank, entry in enumerate(results, start=1):
-        tag = " ◀ YOU" if entry["is_me"] else ""
+        tag = "  ◀ YOU" if entry["is_me"] else ""
         medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"  {rank}.")
-        print(f"{medal:<5} {entry['name']:<28} {entry['count']:>12,}{tag}")
-    print()
+        table.add_row(medal, entry["name"] + tag, f"{entry['count']:,}")
+
+    console.print()
+    console.print(table)
 
     top = results[0]
     me = next((entry for entry in results if entry["is_me"]), None)
@@ -31,13 +42,16 @@ def print_leaderboard(results: list[dict], year: int) -> None:
 
     if me:
         if my_rank == 1:
-            print(f"🏆  You're #1 with {me['count']:,} achievements in {year}. Nice.")
+            console.print(
+                f"🏆  You're #1 with {me['count']:,} achievements in {year}. Nice."
+            )
         else:
             gap = top["count"] - me["count"]
-            print(
+            console.print(
                 f"📊  You're #{my_rank} with {me['count']:,} achievements. "
                 f"{top['name']} leads by {gap:,}."
             )
+    console.print()
 
 
 def main() -> None:
@@ -71,7 +85,7 @@ def main() -> None:
 
     my_id = get_my_id(debug=args.debug)
     if API_KEY == "YOUR_API_KEY_HERE" or not my_id:
-        print(
+        console.print(
             "❌  Please set STEAM_API_KEY in .env and, either STEAM_ID or run steam-login first."
         )
         return

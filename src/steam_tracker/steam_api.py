@@ -5,7 +5,15 @@ from datetime import UTC, datetime
 import requests
 
 from .config import FRIENDS_OVERRIDE
-from .steam_http import COMMUNITY, FINALIZE_URL, _tls, auth_post, get, get_authed
+from .steam_http import (
+    COMMUNITY,
+    FINALIZE_URL,
+    _tls,
+    auth_post,
+    get,
+    get_authed,
+    store_get,
+)
 from .utils import decode_token
 
 _BLOCKED = -1  # sentinel: achievement fetch blocked (403)
@@ -370,6 +378,53 @@ def finalize_session(refresh_token: str, steam_id: str, *, debug: bool = False) 
                 "Login failed: steamLoginSecure cookie not set after transfer."
             )
         return cookie
+
+
+def search_apps(query: str) -> list[dict]:
+    """Searches the Steam store for apps matching query. Returns [{id, name}] dicts."""
+    data = store_get("api/storesearch/", {"term": query, "l": "english", "cc": "US"})
+    if not data:
+        return []
+    return [
+        {"id": item["id"], "name": item["name"]}
+        for item in data.get("items", [])
+        if item.get("type") == "app"
+    ]
+
+
+def get_game_schema(app_id: int) -> tuple[str, list[dict]]:
+    """Returns (game_name, achievements) from GetSchemaForGame.
+
+    Returns ("", []) if the game has no achievement schema.
+    Each achievement dict has: name, displayName, description, hidden, icon, icongray.
+    """
+    data = get("ISteamUserStats/GetSchemaForGame/v2", {"appid": app_id, "l": "english"})
+    if not data:
+        return "", []
+    game = data.get("game", {})
+    name = game.get("gameName", "")
+    achievements = game.get("availableGameStats", {}).get("achievements", [])
+    return name, achievements
+
+
+def get_all_player_achievements(steam_id: str, app_id: int) -> list[dict] | None:
+    """Returns all achievements for a player in a game, or None on failure.
+
+    Each dict has: apiname, achieved (0|1), unlocktime, name, description.
+    Returns None when the request is blocked (403 / success=false) — typically
+    because the game's stats are private or the player has never played it.
+    """
+    _tls.last_status = None
+    data = get(
+        "ISteamUserStats/GetPlayerAchievements/v1",
+        {"steamid": steam_id, "appid": app_id, "l": "english"},
+    )
+    if not data:
+        return None
+    playerstats = data.get("playerstats", {})
+    if not playerstats.get("success"):
+        return None
+    return playerstats.get("achievements", [])
 
 
 def get_ytd_achievement_count(steam_id: str, app_id: int, year: int) -> int:

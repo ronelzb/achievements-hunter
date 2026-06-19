@@ -14,12 +14,14 @@ dependencies = [
     "python-dotenv>=1.0",
     "rsa>=4.9",
     "keyring>=25.0",
+    "rich>=13.0",
 ]
 
 [project.scripts]
 steam-achievements = "steam_tracker.leaderboard_cli:main"
 steam-login = "steam_tracker.steam_auth:main"
 steam-friends = "steam_tracker.steam_friends_cli:main"
+steam-game = "steam_tracker.steam_game_achievements_cli:main"
 
 [dependency-groups]
 dev = [

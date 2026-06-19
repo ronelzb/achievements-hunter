@@ -51,6 +51,50 @@ Rank  Player                       Achievements
 🏆  You're #1 with 127 achievements in 2026. Nice.
 ```
 
+## `steam-game` — list achievements for a game
+
+```bash
+# Search by name (pick from results if multiple matches)
+uv run steam-game "Elden Ring"
+
+# Skip search with a known App ID
+uv run steam-game --app-id 1245620
+
+# Show only achievements you've won
+uv run steam-game "Elden Ring" --filter won
+
+# Show only achievements you haven't won yet
+uv run steam-game "Elden Ring" --filter not-won
+
+# Use Steam's schema order instead of won-first
+uv run steam-game "Elden Ring" --sort steam
+
+# Print raw API errors for troubleshooting
+uv run steam-game "Elden Ring" --debug
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `query` | — | Game name to search on the Steam store |
+| `--app-id ID` | — | Steam App ID; skips the search step |
+| `--filter won\|not-won\|all` / `-f` | all | Show only won, not-won, or all achievements |
+| `--sort won-first\|steam` / `-s` | won-first | Sort: won (newest first) then not-won, or Steam schema order |
+| `--debug` / `-d` | off | Print raw API errors |
+
+```text
+Game: Elden Ring (App ID: 1245620)
+Achievements: 34 / 42 won (81.0%)
+
+  #    Achievement                   Description                              Unlocked
+ ────────────────────────────────────────────────────────────────────────────────────
+   1 ✓ Elden Ring                    Obtained the Elden Ring. The            2024-03-10
+                                     impossible was made possible.
+   2 ✓ Legendary Armaments           Acquired all legendary armaments.       2024-02-28
+  ...
+  41 ✗ Legendary Sorceries and       Acquired all legendary sorceries and    —
+       Incantations                  incantations.
+```
+
 ## `steam-friends` — browse your friends list
 
 ```bash

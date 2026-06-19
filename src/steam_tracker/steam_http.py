@@ -9,6 +9,7 @@ DEBUG = False
 _tls = threading.local()  # per-thread context for debug labels
 BASE = "https://api.steampowered.com"
 COMMUNITY = "https://steamcommunity.com"
+STORE = "https://store.steampowered.com"
 AUTH_API = f"{BASE}/IAuthenticationService"
 FINALIZE_URL = "https://login.steampowered.com/jwt/finalizelogin"
 
@@ -82,6 +83,19 @@ def _api_get(endpoint: str, params: dict, retries: int) -> dict | None:
         except requests.RequestException:
             time.sleep(1)
     return None
+
+
+def store_get(
+    path: str, params: dict | None = None, *, timeout: int = 10
+) -> dict | None:
+    """GET a store.steampowered.com path. Returns None on any network or HTTP error."""
+    try:
+        response = requests.get(f"{STORE}/{path}", params=params or {}, timeout=timeout)
+        if response.status_code != 200:
+            return None
+        return response.json()
+    except requests.RequestException:
+        return None
 
 
 def get(endpoint: str, params: dict, retries: int = 3) -> dict | None:
