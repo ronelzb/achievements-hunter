@@ -55,6 +55,7 @@ select = [
     "B",      # flake8-bugbear (common bugs)
     "SIM",    # flake8-simplify
     "RUF",    # Ruff-specific rules
+    "ARG",    # flake8-unused-arguments
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
