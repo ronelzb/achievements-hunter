@@ -4,29 +4,29 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import UTC, datetime
+from pathlib import Path
 
 from rich.console import Console
 
 from . import steam_http
 from .achievement_guide import fetch_guide
-from .contracts import GuideContent, LLMStrategyOutput, PendingAchievement
+from .contracts import (
+    GuideContent,
+    LLMStrategyOutput,
+    PendingAchievement,
+    StrategyResult,
+)
 from .db import get_session, init_db
-from .repository import save_guide, save_strategy
+from .platinum_report import extract_annotations, render_docx, render_to_text
+from .repository import get_latest_guide, get_latest_strategy, save_guide, save_strategy
 from .settings import LLM_MODEL
 from .steam_api import get_all_player_achievements, get_game_schema, search_apps
 from .steam_auth import get_my_id
 from .strategy_generator import StrategyGenerationError, StrategyGenerator
+from .utils import game_slug
 
 console = Console(highlight=False, markup=False)
-
-_CATEGORY_LABEL: dict[str, str] = {
-    "missable": "MISSABLE",
-    "story": "STORY",
-    "grind": "GRIND",
-    "collectible": "COLLECTIBLE",
-    "difficulty": "DIFFICULTY",
-    "misc": "MISC",
-}
 
 
 def _pick_app(query: str) -> tuple[int, str] | None:
@@ -77,34 +77,6 @@ def _build_pending(schema: list[dict], player: list[dict]) -> list[PendingAchiev
     return pending
 
 
-def _print_strategy(output: LLMStrategyOutput, game_name: str) -> None:
-    hr = "─" * 60
-    console.print(f"\n{hr}")
-    console.print(f"  {game_name} — Platinum Strategy")
-    console.print(
-        f"  Minimum runs: {output.total_runs}  •  Est. hours: {output.estimated_hours}"
-    )
-    console.print(f"{hr}\n")
-    console.print(output.summary)
-
-    for section in output.sections:
-        label = _CATEGORY_LABEL.get(section.category, section.category.upper())
-        console.print(f"\n[{label}]  {section.title}")
-        console.print(f"  {section.overview}")
-        for item in section.items:
-            console.print(f"\n  o  {item.display_name}")
-            console.print(f"     {item.tip}")
-            if item.guide_link:
-                console.print(f"     -> {item.guide_link}")
-
-    console.print(f"\n{hr}")
-    console.print("  Recommended Order")
-    console.print(hr)
-    for i, step in enumerate(output.recommended_order, start=1):
-        console.print(f"  {i:2}. {step}")
-    console.print()
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate an AI-powered platinum achievement guide."
@@ -117,6 +89,18 @@ def main() -> None:
         "--no-guide",
         action="store_true",
         help="Skip web guide fetch; use AI training knowledge only",
+    )
+    parser.add_argument(
+        "--refine",
+        "-r",
+        metavar="PATH",
+        help="Incorporate notes from an existing guide DOCX and regenerate",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        metavar="PATH",
+        help="Override output DOCX path (default: {slug}_{appid}_guide.docx)",
     )
     parser.add_argument(
         "--debug",
@@ -132,7 +116,7 @@ def main() -> None:
 
     steam_http.DEBUG = args.debug
 
-    # Resolve app_id + schema
+    # Resolve game
     if args.app_id:
         app_id = args.app_id
         game_name, schema = get_game_schema(app_id)
@@ -149,6 +133,14 @@ def main() -> None:
     if not schema:
         console.print(f"'{game_name}' has no achievement schema.")
         return
+
+    # Determine output path
+    if args.output:
+        output_path = Path(args.output)
+    elif args.refine:
+        output_path = Path(args.refine)
+    else:
+        output_path = Path(f"{game_slug(game_name)}_{app_id}_guide.docx")
 
     init_db()
     session = get_session()
@@ -180,29 +172,70 @@ def main() -> None:
         )
 
         guide: GuideContent | None = None
-        if not args.no_guide:
-            console.print("Fetching achievement guide...")
-            guide = fetch_guide(app_id, game_name, debug=args.debug)
-            if guide.raw_text:
-                console.print(f"  Source: {guide.source}")
-            else:
-                console.print("  No guide found — AI will use training knowledge.")
+        guide_db_row = None
+        annotations = None
+
+        if args.refine:
+            refine_path = Path(args.refine)
+            if not refine_path.exists():
+                console.print(f"File not found: {refine_path}")
+                return
+
+            strategy_row = get_latest_strategy(session, app_id)
+            if strategy_row is None:
+                console.print(
+                    f"No cached strategy for '{game_name}'. Run without --refine first."
+                )
+                return
+
+            baseline = render_to_text(
+                LLMStrategyOutput.model_validate(strategy_row.strategy_json)
+            )
+            annotations = extract_annotations(refine_path, baseline)
+
+            guide_db_row = get_latest_guide(session, app_id)
+            if guide_db_row:
+                guide = GuideContent(
+                    source=guide_db_row.source, raw_text=guide_db_row.raw_text
+                )
+            console.print("Refining strategy with your annotations...")
+        else:
+            if not args.no_guide:
+                console.print("Fetching achievement guide...")
+                guide = fetch_guide(app_id, game_name, debug=args.debug)
+                if guide.raw_text:
+                    console.print(f"  Source: {guide.source}")
+                else:
+                    console.print("  No guide found — AI will use training knowledge.")
 
         console.print("Generating platinum strategy...")
         try:
             gen = StrategyGenerator()
-            output = asyncio.run(gen.generate(app_id, game_name, pending, guide))
+            llm_output = asyncio.run(
+                gen.generate(app_id, game_name, pending, guide, annotations)
+            )
         except StrategyGenerationError as exc:
             console.print(f"Strategy generation failed: {exc}")
             return
 
-        guide_row = None
-        if guide and guide.raw_text:
-            guide_row = save_guide(session, app_id, guide.source, guide.raw_text)
-        save_strategy(session, app_id, guide_row, LLM_MODEL, output.model_dump())
-        console.print("Strategy saved to database.\n")
+        # Save guide (normal run only — refine reuses the cached guide row)
+        if not args.refine and guide and guide.raw_text:
+            guide_db_row = save_guide(session, app_id, guide.source, guide.raw_text)
 
-        _print_strategy(output, game_name)
+        save_strategy(session, app_id, guide_db_row, LLM_MODEL, llm_output.model_dump())
+
+        result = StrategyResult(
+            app_id=app_id,
+            game_name=game_name,
+            model=LLM_MODEL,
+            output=llm_output,
+            created_at=datetime.now(UTC),
+            is_refinement=bool(args.refine),
+        )
+        render_docx(result, pending, output_path)
+
+        console.print("Strategy saved to database.")
+        console.print(f"Guide written to: {output_path}")
 
     finally:
         session.close()

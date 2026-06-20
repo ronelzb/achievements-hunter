@@ -94,7 +94,7 @@ def test_missing_steam_id_prints_error(monkeypatch, capsys):
 # ── no query / no app-id ──────────────────────────────────────────────────────
 
 
-def test_no_query_and_no_app_id_exits(monkeypatch, capsys):
+def test_no_query_and_no_app_id_exits(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["steam-game"])
     with pytest.raises(SystemExit):
         steam_game_achievements_cli.main()
@@ -149,7 +149,7 @@ def test_multiple_results_empty_input_cancels(monkeypatch, capsys):
 # ── --app-id ──────────────────────────────────────────────────────────────────
 
 
-def test_app_id_skips_search(monkeypatch, capsys):
+def test_app_id_skips_search(monkeypatch):
     mock_search = MagicMock()
     monkeypatch.setattr(steam_game_achievements_cli, "API_KEY", "REAL_KEY")
     monkeypatch.setattr(steam_game_achievements_cli, "get_my_id", lambda *_: _MY_ID)
